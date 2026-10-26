@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">MPV Tethys Config</title>
+  <desc id="desc">An illustrated dark video player next to the words Your player. Your controls. Windows, Tethys, keyboard first.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101222"/><stop offset="1" stop-color="#21233d"/></linearGradient>
+    <linearGradient id="screen" x2="1" y2="1"><stop stop-color="#38245f"/><stop offset="1" stop-color="#122c44"/></linearGradient>
+    <linearGradient id="accent"><stop stop-color="#a78bfa"/><stop offset="1" stop-color="#5eead4"/></linearGradient>
+  </defs>
+  <rect width="1200" height="360" rx="24" fill="url(#bg)"/>
+  <circle cx="1060" cy="18" r="240" fill="#5eead4" opacity=".025"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="56" y="78" fill="#5eead4" font-size="14" font-weight="700" letter-spacing="4">A PERSONAL MPV SETUP</text>
+    <text x="52" y="145" fill="#f4f4fb" font-size="54" font-weight="750">MPV Tethys Config</text>
+    <text x="56" y="195" fill="#c5c8db" font-size="25">Your player. Your controls.</text>
+    <g fill="#181d30" stroke="#343b53"><rect x="56" y="247" width="112" height="36" rx="18"/><rect x="180" y="247" width="100" height="36" rx="18"/><rect x="292" y="247" width="165" height="36" rx="18"/></g>
+    <g fill="#dde0ee" font-size="14" text-anchor="middle"><text x="112" y="270">WINDOWS</text><text x="230" y="270">TETHYS</text><text x="374" y="270">KEYBOARD FIRST</text></g>
+  </g>
+  <g transform="translate(703 62)">
+    <rect x="8" y="12" width="432" height="250" rx="17" fill="#000" opacity=".25"/>
+    <rect width="432" height="250" rx="16" fill="#111523" stroke="#4b5069"/>
+    <rect x="12" y="12" width="408" height="177" rx="9" fill="url(#screen)"/>
+    <path d="M12 165L108 80L185 145L270 55L420 174V189H12Z" fill="#a78bfa" opacity=".16"/>
+    <circle cx="216" cy="102" r="32" fill="#fff" opacity=".08"/>
+    <path d="M208 85L232 102L208 119Z" fill="#f5f3ff"/>
+    <rect x="22" y="204" width="388" height="3" rx="1.5" fill="#3b4058"/>
+    <rect x="22" y="204" width="180" height="3" rx="1.5" fill="url(#accent)"/>
+    <circle cx="202" cy="205.5" r="5" fill="#5eead4"/>
+    <path d="M25 220L36 227L25 234Z" fill="#e4e7f5"/>
+    <g fill="#9da6c1" font-family="Segoe UI,Arial,sans-serif" font-size="12"><text x="53" y="231">01:24 / 04:32</text><text x="303" y="231">1x</text><text x="342" y="231">1080p</text></g>
+    <path d="M395 221H402V227M402 231V237H395M391 237H385V231M385 227V221H391" fill="none" stroke="#c5c8db" stroke-width="1.5"/>
+  </g>
+</svg>

@@ -1,0 +1,34 @@
+# Downloaded player/tool binaries
+*.exe
+*.com
+*.dll
+*.zip
+*.7z
+
+# Playback/runtime data (including optional SponsorBlock identity)
+**/cache/
+**/screenshots/
+**/watch_later/
+**/watch_history/
+**/mpv-history.txt
+**/playback-preferences.json
+**/window-state.json
+**/volume-osd-position.txt
+**/sponsorblock.txt
+**/sponsorblock.db*
+**/cookies.txt
+**/cookies*.sqlite*
+**/yt-dlp.conf
+**/cookies.local.conf
+*.log
+*.bgra
+*.part
+*.tmp
+
+# Local tooling
+.DS_Store
+Thumbs.db
+Desktop.ini
+__pycache__/
+.vscode/
+.idea/

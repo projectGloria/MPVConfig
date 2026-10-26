@@ -1,0 +1,38 @@
+[
+  {
+    "file": "quality-menu-GPL-2.0.txt",
+    "source": "https://raw.githubusercontent.com/christoph-heinrich/mpv-quality-menu/master/LICENSE.md",
+    "retrieved": "2026-10-26",
+    "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643"
+  },
+  {
+    "file": "sponsorblock-GPL-3.0.txt",
+    "source": "https://raw.githubusercontent.com/po5/mpv_sponsorblock/master/LICENSE",
+    "retrieved": "2026-10-26",
+    "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+  },
+  {
+    "file": "thumbnail-script-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/TheAMM/mpv_thumbnail_script/master/LICENSE",
+    "retrieved": "2026-10-26",
+    "sha256": "c53a65c2fd561c87eaabf1072ef5dcab8653042bc15308465f52413585eb6271"
+  },
+  {
+    "file": "mpv-Copyright.txt",
+    "source": "https://raw.githubusercontent.com/mpv-player/mpv/master/Copyright",
+    "retrieved": "2026-10-26",
+    "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23"
+  },
+  {
+    "file": "mpv-GPL.txt",
+    "source": "https://raw.githubusercontent.com/mpv-player/mpv/master/LICENSE.GPL",
+    "retrieved": "2026-10-26",
+    "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+  },
+  {
+    "file": "mpv-LGPL.txt",
+    "source": "https://raw.githubusercontent.com/mpv-player/mpv/master/LICENSE.LGPL",
+    "retrieved": "2026-10-26",
+    "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9"
+  }
+]
