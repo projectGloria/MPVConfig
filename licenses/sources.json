@@ -12,12 +12,6 @@
     "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
   },
   {
-    "file": "thumbnail-script-LICENSE.txt",
-    "source": "https://raw.githubusercontent.com/TheAMM/mpv_thumbnail_script/master/LICENSE",
-    "retrieved": "2026-10-26",
-    "sha256": "c53a65c2fd561c87eaabf1072ef5dcab8653042bc15308465f52413585eb6271"
-  },
-  {
     "file": "mpv-Copyright.txt",
     "source": "https://raw.githubusercontent.com/mpv-player/mpv/master/Copyright",
     "retrieved": "2026-10-26",
@@ -34,5 +28,11 @@
     "source": "https://raw.githubusercontent.com/mpv-player/mpv/master/LICENSE.LGPL",
     "retrieved": "2026-10-26",
     "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9"
+  },
+  {
+    "file": "thumbfast-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/po5/thumbfast/master/LICENSE",
+    "retrieved": "2026-10-29",
+    "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
   }
 ]

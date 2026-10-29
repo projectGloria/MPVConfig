@@ -136,10 +136,29 @@ local function run()
     local old=s.timers[#s.timers]
     s.messages['pip-managed'](); old.cb()
     check('Cancelled PiP timer cannot enable ontop',s.props.ontop==false and old.dead)
-    s.messages['pip-managed']()
+    check('PiP entered from fullscreen exits back to fullscreen',s.props.fullscreen==true)
+    s.props.fullscreen=false; s.messages['pip-managed']()
     check('PiP can be entered again after cancellation',s.props.ontop==true)
     s.props.fullscreen=true; s.observers[1].cb('fullscreen',true)
     check('Fullscreen clears active PiP ontop',s.props.ontop==false)
+
+    s=fixture('pip_manager.lua'); s.props.ontop=true; s.props['autofit-larger']='70%x70%'
+    s.props['osd-width']=1280; s.props['osd-height']=720
+    s.messages['pip-managed']()
+    check('PiP lifts autofit cap',s.props['autofit-larger']=='100%x100%' and s.props.ontop==true)
+    s.messages['pip-managed'](); s:fire(0.08); s:fire(0.05)
+    check('PiP exit restores ontop, autofit and size',s.props.ontop==true
+        and s.props['autofit-larger']=='70%x70%' and s.props.geometry=='1280x720')
+
+    s=fixture('pip_manager.lua'); s.props['window-maximized']=true; s.messages['pip-managed']()
+    check('PiP from maximized un-maximizes before geometry',s.props['window-maximized']==false and s.props.geometry==nil)
+    s.observers[#s.observers].cb(); s:fire(0.1)
+    check('PiP geometry applies after leaving maximized',s.props.geometry=='33%+-10+-10')
+    s.messages['pip-managed']()
+    check('PiP exit returns to maximized with flag still set',s.props['window-maximized']==true
+        and s.props['user-data/pip_manager/active']==true)
+    s:fire(0.3)
+    check('PiP flag clears after maximize settles',s.props['user-data/pip_manager/active']==false)
 
     s=fixture('history_menu.lua'); shared(s,a); s.props.path=a
     s:event('file-loaded'); s:fire(2)

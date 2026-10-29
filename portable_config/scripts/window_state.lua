@@ -262,6 +262,9 @@ mp.observe_property("window-maximized", "bool", function(_, max)
 end)
 
 mp.observe_property("ontop", "bool", function(_, v)
+    -- PiP forces ontop; that is not the user's preference. pip_manager sets
+    -- its flag before ontop and restores the real value after clearing it.
+    if is_pip() then return end
     if type(v) == "boolean" and o.persist_ontop then
         saved.ontop = v
         schedule_save()
@@ -368,8 +371,10 @@ mp.register_script_message("window-state-pip", function(active)
     pip_active = (active == "1" or active == "true" or active == true)
     if was and not pip_active then
         -- Leaving PiP: adopt the size pip_manager just restored (after a beat).
+        -- Not forced: if PiP returned to fullscreen/maximized, the screen
+        -- size must not become the preferred windowed size.
         mp.add_timeout(0.25, function()
-            snapshot_windowed(true)
+            snapshot_windowed()
         end)
     end
 end)

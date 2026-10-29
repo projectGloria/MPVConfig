@@ -15,6 +15,7 @@ Edit text files with a UTF-8 editor and restart MPV. In MPV paths, `~~/` means t
 | `script-opts/history_menu.conf` | History size, grid scale and thumbnail concurrency |
 | `script-opts/window_state.conf` | First-run window defaults and transition timing |
 | `script-opts/pip_manager.conf` | PiP size/position requests |
+| `script-opts/thumbfast.conf` | Seekbar thumbnail size, hardware decoding, streams on/off, idle shutdown |
 | `script-opts/ytdlp_download.conf` | Completed/partial download directories |
 | `script-opts/cookies_auto.conf` | Optional browser cookie selection |
 | `script-opts/loading_preview.conf` | Optional loading covers and deadline |
@@ -64,7 +65,8 @@ The downloader deliberately reads your usual yt-dlp configuration, which may aff
 
 | Script | Role |
 |---|---|
-| `osc_tethys.lua` | Vendored/customized Tethys interface; includes an inactive thumbnailer client |
+| `osc_tethys.lua` | Vendored/customized Tethys interface; asks thumbfast for seekbar thumbnails |
+| `thumbfast.lua` | Unmodified upstream on-demand thumbnailer (one hidden mpv, only while hovering) |
 | `quality-menu.lua` | Vendored/customized streaming format menus and experimental local settings |
 | `autoload.lua` | Folder playlist population |
 | `clipboard.lua` | Manual clipboard load and supported timestamp seeking |

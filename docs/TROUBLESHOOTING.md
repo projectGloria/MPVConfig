@@ -27,7 +27,7 @@ Keep `enabled=no` in `script-opts/loading_preview.conf`. Its optional ffmpeg job
 
 ## PiP size, position or always-on-top behaves strangely
 
-There are known geometry, maximize and temporary-state issues. Press P to leave PiP, then F to change fullscreen state deliberately. To reset persisted preferences, close MPV and rename `portable_config/window-state.json`; the next launch uses defaults. Avoid combining this setup with another window/PiP manager.
+Leaving PiP restores the previous size and state but re-centers the window. Remaining geometry/maximize issues are listed in Known issues. Press P to leave PiP, then F to change fullscreen state deliberately. To reset persisted preferences, close MPV and rename `portable_config/window-state.json`; the next launch uses defaults. Avoid combining this setup with another window/PiP manager.
 
 ## Colors look unusual
 
