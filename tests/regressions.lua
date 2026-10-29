@@ -29,6 +29,7 @@ local function fixture(name)
     m.unregister_event=function(cb) for k,v in pairs(s.events) do if v==cb then s.events[k]=nil end end end
     m.register_script_message=function(k,cb) s.messages[k]=cb end
     m.add_key_binding=function() end
+    m.add_hook=function() end
     m.add_timeout=function(t,cb)
         local x={cb=cb,delay=t,kill=function(self) self.dead=true end}
         s.timers[#s.timers+1]=x
@@ -159,6 +160,12 @@ local function run()
         and s.props['user-data/pip_manager/active']==true)
     s:fire(0.3)
     check('PiP flag clears after maximize settles',s.props['user-data/pip_manager/active']==false)
+
+    s=fixture('playback_preferences.lua'); s.props.path='D:/Media/sample.mp4'
+    s.messages['play-pause']()
+    check('Play/pause toggles pause mid-video',#s.commands==1 and s.commands[1][1]=='cycle' and s.commands[1][2]=='pause')
+    s.props['eof-reached']=true; s.props.pause=true; s.messages['play-pause']()
+    check('Play at end of video replays it',s.commands[2][1]=='seek' and s.commands[2][2]==0 and s.props.pause==false)
 
     s=fixture('history_menu.lua'); shared(s,a); s.props.path=a
     s:event('file-loaded'); s:fire(2)

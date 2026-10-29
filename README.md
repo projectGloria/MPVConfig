@@ -103,7 +103,7 @@ Try **Space** to pause, **F** for fullscreen, **P** for PiP and **Ctrl+H** for h
 | **Alt+S** | Save a PNG screenshot |
 | **Q** | Quit |
 
-**Replay from the start:** right-click the Tethys play button. At the end of a video, its play button becomes Replay. **R cycles looping; it is not the restart shortcut.**
+**Replay from the start:** right-click the Tethys play button. At the end of a video, the play button, Space and right-click all play it again. **R cycles looping; it is not the restart shortcut.**
 
 Default MPV keys are disabled. Keys not listed in `input.conf` may be unavailable; forced controls inside menus still work.
 

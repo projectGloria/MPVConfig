@@ -3376,14 +3376,10 @@ function osc_init()
             return tethysIcon_pause
         end
     end
+    -- Same handler as Space/right-click (playback_preferences.lua), so the
+    -- "replay at end of file" rule lives in one place.
     ne.eventresponder["mbtn_left_up"] =
-        function ()
-            if mp.get_property_bool("eof-reached", false) then
-                mp.commandv("script-message", "replay")
-            else
-                mp.commandv("cycle", "pause")
-            end
-        end
+        function () mp.commandv("script-message", "play-pause") end
     ne.eventresponder["mbtn_right_up"] =
         function () mp.commandv("script-message", "replay") end
 

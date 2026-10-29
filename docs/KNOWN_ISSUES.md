@@ -27,6 +27,6 @@ This is a source/configuration snapshot of a personal player. Packaging improves
 
 ## Validation coverage
 
-The included regression tests cover 27 mocked cases around channel navigation, clipboard seeking, PiP cancellation/state restore and history metadata/thumbnails. Seekbar thumbnails (thumbfast) are not covered by mocked tests. Syntax checks compile active and optional Lua files without executing them. The download-path test mocks subprocesses and checks defaults/overrides.
+The included regression tests cover 29 mocked cases around channel navigation, clipboard seeking, play/pause at end of file, PiP cancellation/state restore and history metadata/thumbnails. Seekbar thumbnails (thumbfast) are not covered by mocked tests. Syntax checks compile active and optional Lua files without executing them. The download-path test mocks subprocesses and checks defaults/overrides.
 
 These checks do not cover every menu callback, physical display transition, live site or renderer. Passing tests should not be read as a claim that the known issues above are fixed.

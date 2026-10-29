@@ -59,9 +59,21 @@ mp.observe_property("sid", "native", function(_, value)
         changed()
     end
 end)
-mp.register_script_message("replay", function()
+local function replay()
     if not mp.get_property("path") then return end
     mp.commandv("seek", 0, "absolute+exact")
     mp.set_property_bool("pause", false)
+end
+mp.register_script_message("replay", replay)
+
+-- Space, right-click and the Tethys play button. keep-open holds the last
+-- frame at the end, where "cycle pause" only flips the flag and playback
+-- stays stuck at EOF; start the same video again instead.
+mp.register_script_message("play-pause", function()
+    if mp.get_property_bool("eof-reached", false) then
+        replay()
+    else
+        mp.commandv("cycle", "pause")
+    end
 end)
 mp.register_event("shutdown", save)

@@ -8,7 +8,7 @@ Uppercase letters mean Shift plus the letter. Key names come from MPV's input sy
 
 | Key | Action |
 |---|---|
-| Space | Toggle pause |
+| Space | Toggle pause; at the end of a video, play it again |
 | Left / Right | Seek −1 / +1 second (actual landing can depend on keyframes) |
 | KP0–KP9 | Jump to 0%, 10%, … 90% |
 | Alt+J | Open the console with a time-position command ready to edit |
@@ -48,7 +48,7 @@ To restart immediately, right-click the Tethys play button or enter `script-mess
 | F / Enter / keypad Enter | Toggle fullscreen |
 | Esc | Leave fullscreen (or close an active menu) |
 | Double left-click | Toggle fullscreen |
-| Right-click | Play / pause (over the Tethys play button: replay from start) |
+| Right-click | Play / pause; at the end of a video, play it again (over the Tethys play button: always replay from start) |
 | P | Managed picture-in-picture |
 | Alt+O | Toggle always-on-top |
 | Alt+T | Toggle native window borders |
