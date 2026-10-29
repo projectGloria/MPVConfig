@@ -48,7 +48,7 @@ To restart immediately, right-click the Tethys play button or enter `script-mess
 | F / Enter / keypad Enter | Toggle fullscreen |
 | Esc | Leave fullscreen (or close an active menu) |
 | Double left-click | Toggle fullscreen |
-| Right-click | Tethys menu |
+| Right-click | Play / pause (over the Tethys play button: replay from start) |
 | P | Managed picture-in-picture |
 | Alt+O | Toggle always-on-top |
 | Alt+T | Toggle native window borders |
@@ -57,7 +57,7 @@ To restart immediately, right-click the Tethys play button or enter `script-mess
 | F5 | MPV version, output and decoder |
 | F7 | Codec, size and audio information |
 | F12 | Console |
-| F6 / Alt+W | Streaming video / audio format menu |
+| F6 / Alt+W | Video / audio menu: stream formats for URLs; resolution choice (original, 720p, 480p ...) and track choice for local files |
 | Alt+E | RGX color enhancement; sharpening needs the separately supplied CAS shader |
 | Alt+C | Cookie-source status |
 | Ctrl+V | Open clipboard URL/path |
@@ -67,7 +67,7 @@ To restart immediately, right-click the Tethys play button or enter `script-mess
 
 ## Menu navigation
 
-**Quality:** Up/Down or wheel, Enter/left-click to select, Esc/right-click to close. Local-file quality selections have a known callback bug; use the console or direct settings until fixed.
+**Quality:** Up/Down or wheel, Enter/left-click to select, Esc/right-click to close.
 
 **History/channel grid:** arrows or wheel, Enter/keypad Enter to play, PgUp/PgDn for pages, Home/End for first/last, Esc/Backspace to close. Delete removes a watch-history item; channel entries cannot be deleted here. Mouse selection is not implemented by the history grid.
 

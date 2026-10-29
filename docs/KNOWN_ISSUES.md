@@ -8,7 +8,6 @@ This is a source/configuration snapshot of a personal player. Packaging improves
 
 | Area | Known behavior | Current mitigation |
 |---|---|---|
-| Local F6/Alt+W selection | Calls a global `handle_local_select` even though the implementation is declared local later. Selecting a different local setting can stop the menu script. | Use streaming format selection; adjust local settings in the console/config. |
 | Optional SponsorBlock | HTTPError is caught as URLError before its specific handler; an empty/no-segments response can trigger unlimited retries. Old requests can also affect the next file. | Kept outside `portable_config/scripts`; inactive until explicitly installed. |
 | Loading covers | The ffmpeg job holds the on-load hook. A missing cover can add substantial startup latency. | Disabled in the shared options file. |
 | Window/PiP | Maximize can overwrite preferred dimensions; PiP does not preserve prior ontop; geometry anchoring/monitor detection and delayed callbacks need repair. | Avoid relying on precise multi-monitor restoration; reset state if necessary. |
@@ -20,7 +19,6 @@ This is a source/configuration snapshot of a personal player. Packaging improves
 - Preview keys truncate local paths and do not fingerprint source changes. Its cache cap only runs at startup. Leave previews off if these behaviors matter.
 - Small history cards hide fixed-size bitmaps. Newly completed channel thumbnails may require reopening the menu. UTF-8 labels can be cut mid-character; clips shorter than ten seconds may get no local thumbnail.
 - Curated streaming selectors can fail on sites without separate audio/video or without the requested codec. Quality reload's resume listener is not bound to a unique load. Explicit `ytdl://` URLs have inconsistent key handling across scripts.
-- The local quality menu has a second RGX path that assumes a CAS shader exists, and its changes do not share state with Alt+E. No CAS shader is included here.
 - Single-instance forwarding uses a pipe configured separately from MPV's server option, has a blocking read, and can cross between installs sharing the same pipe. Both names must be changed together for isolation.
 - State/history writes are direct, non-atomic rewrites. Concurrent instances or interruption during saving can lose preferences.
 - Clipboard cleanup is tailored toward YouTube and may remove meaningful parameters on another site. Quoted Explorer paths and some timestamp forms need handling.

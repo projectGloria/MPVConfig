@@ -422,7 +422,14 @@ local function set_format(url, video_format, audio_format)
     end
 end
 
-local function text_menu_open(formats, active_format, menu_type)
+-- Forward declaration: the select callback inside text_menu_open closes over
+-- this upvalue. Without it the call resolved to an undefined global, because
+-- the local implementation is declared further down the file.
+local handle_local_select
+
+-- is_local: the local-file resolution menu has no 'Auto' row (that row only clears the
+-- streaming ytdl-format override, which means nothing for a file on disk).
+local function text_menu_open(formats, active_format, menu_type, is_local)
     local active = 0
     local selected = 1
     for i, format in ipairs(formats) do
@@ -432,7 +439,7 @@ local function text_menu_open(formats, active_format, menu_type)
             break
         end
     end
-    if active_format == '' then
+    if active_format == '' and not is_local then
         active = #formats + 1
         selected = active
     end
@@ -448,7 +455,8 @@ local function text_menu_open(formats, active_format, menu_type)
 
     local width, height
     local margin_top, margin_bottom = 0, 0
-    local num_options = #formats > 0 and #formats + 2 or 1
+    local extra_rows = is_local and 1 or 2 -- [Auto +] Switch-to row
+    local num_options = #formats > 0 and #formats + extra_rows or 1
 
     local function get_scrolled_lines()
         local output_height = height - opts.text_padding_y * 2 - margin_top * height - margin_bottom * height
@@ -519,8 +527,10 @@ local function text_menu_open(formats, active_format, menu_type)
             end
             -- LOCAL PATCH: 'Disabled' reads as "turn the video off". It only
             -- clears the ytdl-format override, so name it for what it does.
-            ass:append(choose_prefix(#formats + 1) .. 'Auto  (mpv default)\\N')
-            ass:append(choose_prefix(#formats + 2) .. 'Switch to ' ..
+            if not is_local then
+                ass:append(choose_prefix(#formats + 1) .. 'Auto  (mpv default)\\N')
+            end
+            ass:append(choose_prefix(num_options) .. 'Switch to ' ..
                 menu_type.to_other_type.type_capitalized .. ' menu')
         else
             ass:append('no formats found\\N')
@@ -628,7 +638,7 @@ local function text_menu_open(formats, active_format, menu_type)
         menu_close()
         if selected == active then return end
         if current_url == nil then
-            handle_local_select(formats[selected], selected, #formats + 1, menu_type)
+            handle_local_select(formats[selected])
             return
         end
 
@@ -876,55 +886,96 @@ function menu_close()
     open_menu_state = nil
 end
 
+-- Local-file resolution choices, YouTube style: 1080p / 720p / 480p ...
+-- A file on disk has one fixed resolution, so lower choices are produced by
+-- downscaling inside the filter chain. With zero-copy d3d11va the frames live
+-- in GPU textures that the software 'scale' filter cannot read (the graph
+-- fails to configure), so the GPU video processor (d3d11vpp) does the resize
+-- there; software/copy-back decoding uses the ordinary 'scale' filter.
+local RES_LABEL = '@qmres'
+local standard_heights = { 2160, 1440, 1080, 720, 480, 360, 240, 144 }
+local local_target = 0 -- 0 = original; otherwise the chosen nominal height
+
+local function res_name(h)
+    if h >= 2160 then return h .. "p (4K)" end
+    if h >= 1440 then return h .. "p (2K)" end
+    return h .. "p"
+end
+
+-- Nominal height of the decoded source, using the same long/short-edge rule
+-- as the Tethys label so 1920x800 reads as 1080p and 1080x1920 as 1080p.
+local function source_nominal(w, h)
+    local long, short = math.max(w, h), math.min(w, h)
+    for _, sh in ipairs(standard_heights) do
+        if long >= sh * 16 / 9 * 0.94 or short >= sh * 0.94 then return sh end
+    end
+    return short
+end
+
+-- Scale factor for a nominal height: whichever edge is the binding limit,
+-- which is how streaming sites size letterboxed and vertical encodes.
+local function res_factor(w, h, target)
+    local long, short = math.max(w, h), math.min(w, h)
+    return math.min(target / short, (target * 16 / 9) / long)
+end
+
+local function apply_local_resolution(target)
+    mp.commandv('vf', 'remove', RES_LABEL)
+    local_target = target
+    if target == 0 then return end
+    local vp = mp.get_property_native('video-params')
+    if not vp or not vp.w then return end
+    local f = res_factor(vp.w, vp.h, target)
+    if mp.get_property('hwdec-current') == 'd3d11va' then
+        mp.commandv('vf', 'add', ('%s:d3d11vpp=scale=%.4f'):format(RES_LABEL, f))
+    else
+        -- Round to even sizes: 4:2:0 chroma needs both dimensions even.
+        local w = math.floor(vp.w * f / 2 + 0.5) * 2
+        local h = math.floor(vp.h * f / 2 + 0.5) * 2
+        mp.commandv('vf', 'add', ('%s:scale=w=%d:h=%d'):format(RES_LABEL, w, h))
+    end
+end
+
+-- vf is a global player option, so a downscale chosen for one file would
+-- silently carry over to the next. Each file starts at its original size.
+mp.register_event('start-file', function()
+    if local_target ~= 0 then apply_local_resolution(0) end
+end)
+-- Alt+H flips between d3d11va and software decoding; the filter that fits one
+-- path fails on the other, so rebuild it for the new decoder.
+mp.observe_property('hwdec-current', 'string', function()
+    if local_target ~= 0 then apply_local_resolution(local_target) end
+end)
+
 local function build_local_video_formats()
-    local shaders = mp.get_property_native("glsl-shaders") or {}
-    local has_cas = false
-    for _, s in ipairs(shaders) do
-        if s:match("CAS%.glsl") then has_cas = true; break end
-    end
-    local scale = mp.get_property("scale") or ""
-    local deband = mp.get_property_bool("deband")
-    local interp = mp.get_property_bool("interpolation")
-    local vsync = mp.get_property("video-sync") or ""
-
-    local active_id = "balanced"
-    if has_cas then
-        active_id = "rgx"
-    elseif scale == "bilinear" and not deband and not interp then
-        active_id = "fast"
-    elseif vsync == "display-resample" and interp then
-        active_id = "local-hq"
-    end
-
-    local deband_str = deband and "ON" or "OFF"
-    local interp_str = interp and "ON" or "OFF"
-
-    local formats = {
-        { id = "local-hq",      label = "High Quality  (Spline36 / Resample / Smooth)" },
-        { id = "rgx",           label = "RGX Enhance   (AMD CAS Sharpness + Punch)" },
-        { id = "balanced",      label = "Balanced      (Spline36 / Audio Sync)" },
-        { id = "fast",          label = "Fast / Low    (Bilinear / Low Power)" },
-        { id = "toggle-deband", label = "Debanding     [" .. deband_str .. "]  (Toggle)" },
-        { id = "toggle-interp", label = "Interpolation [" .. interp_str .. "]  (Toggle)" },
-    }
-
-    local tracks = mp.get_property_native("track-list") or {}
-    local video_tracks = {}
-    for _, t in ipairs(tracks) do
-        if t.type == "video" then
-            table.insert(video_tracks, t)
+    local formats = {}
+    local active_id = ""
+    local vp = mp.get_property_native("video-params")
+    if vp and vp.w and vp.h and vp.w > 0 then
+        local source = source_nominal(vp.w, vp.h)
+        formats[1] = { id = "res-0", label = res_name(source) .. "  (original)" }
+        for _, sh in ipairs(standard_heights) do
+            -- Only real downscales: skip anything within ~5% of the source.
+            if res_factor(vp.w, vp.h, sh) < 0.95 then
+                formats[#formats + 1] = { id = "res-" .. sh, label = res_name(sh) }
+            end
         end
+        active_id = "res-" .. local_target
+    end
+
+    -- Only offer track switching when there is actually a choice; cover art
+    -- counts as a video track in mpv but is never a useful pick here.
+    local video_tracks = {}
+    for _, t in ipairs(mp.get_property_native("track-list") or {}) do
+        if t.type == "video" and not t.albumart then video_tracks[#video_tracks + 1] = t end
     end
     if #video_tracks > 1 then
         for _, vt in ipairs(video_tracks) do
-            local track_title = vt.title or vt.lang or ("Track " .. tostring(vt.id))
-            table.insert(formats, {
+            formats[#formats + 1] = {
                 id = "track-" .. tostring(vt.id),
-                label = "Video Track   " .. track_title .. (vt.selected and " (Active)" or "")
-            })
-            if vt.selected then
-                active_id = "track-" .. tostring(vt.id)
-            end
+                label = "Video track: " .. (vt.title or vt.lang or ("#" .. tostring(vt.id))) ..
+                    (vt.selected and "  (playing)" or ""),
+            }
         end
     end
 
@@ -958,87 +1009,28 @@ local function build_local_audio_formats()
     return formats, active_id
 end
 
-local function handle_local_select(format, selected_idx, auto_idx, menu_type)
-    if selected_idx == auto_idx then
-        -- Auto (mpv default)
-        mp.commandv("apply-profile", "local-hq")
-        mp.set_property("scale", "spline36")
-        mp.set_property("dscale", "mitchell")
-        mp.set_property("cscale", "mitchell")
-        mp.set_property("video-sync", "display-resample")
-        mp.set_property_bool("interpolation", true)
-        mp.set_property_bool("deband", true)
-        mp.commandv("change-list", "glsl-shaders", "remove", "~~/shaders/CAS.glsl")
-        mp.set_property_number("saturation", 0)
-        mp.set_property_number("contrast", 0)
-        mp.set_property_number("gamma", 0)
-        mp.osd_message("Profile: High Quality [local-hq]", 2)
-        return
-    end
-
+-- Assigns the forward-declared upvalue above text_menu_open (not a new local).
+function handle_local_select(format)
     if not format then return end
     local id = format.id or ""
 
-    if id == "local-hq" then
-        mp.commandv("apply-profile", "local-hq")
-        mp.set_property("scale", "spline36")
-        mp.set_property("dscale", "mitchell")
-        mp.set_property("cscale", "mitchell")
-        mp.set_property("video-sync", "display-resample")
-        mp.set_property_bool("interpolation", true)
-        mp.set_property_bool("deband", true)
-        mp.commandv("change-list", "glsl-shaders", "remove", "~~/shaders/CAS.glsl")
-        mp.set_property_number("saturation", 0)
-        mp.set_property_number("contrast", 0)
-        mp.set_property_number("gamma", 0)
-        mp.osd_message("Profile: High Quality [local-hq]", 2)
-    elseif id == "rgx" then
-        mp.commandv("apply-profile", "local-hq")
-        mp.set_property("scale", "spline36")
-        mp.set_property_number("saturation", 15)
-        mp.set_property_number("contrast", 6)
-        mp.set_property_number("gamma", -4)
-        mp.commandv("change-list", "glsl-shaders", "append", "~~/shaders/CAS.glsl")
-        mp.osd_message("Profile: RGX Enhance (AMD CAS)", 2)
-    elseif id == "balanced" then
-        mp.set_property("scale", "spline36")
-        mp.set_property("dscale", "mitchell")
-        mp.set_property("cscale", "mitchell")
-        mp.set_property("video-sync", "audio")
-        mp.set_property_bool("interpolation", false)
-        mp.set_property_bool("deband", true)
-        mp.commandv("change-list", "glsl-shaders", "remove", "~~/shaders/CAS.glsl")
-        mp.set_property_number("saturation", 0)
-        mp.set_property_number("contrast", 0)
-        mp.set_property_number("gamma", 0)
-        mp.osd_message("Profile: Balanced (Spline36 / Audio Sync)", 2)
-    elseif id == "fast" then
-        mp.commandv("apply-profile", "fast")
-        mp.commandv("change-list", "glsl-shaders", "remove", "~~/shaders/CAS.glsl")
-        mp.set_property_number("saturation", 0)
-        mp.set_property_number("contrast", 0)
-        mp.set_property_number("gamma", 0)
-        mp.osd_message("Profile: Fast (Bilinear / Low Power)", 2)
-    elseif id == "toggle-deband" then
-        local cur = mp.get_property_bool("deband")
-        mp.set_property_bool("deband", not cur)
-        mp.osd_message("Deband: " .. (not cur and "ON" or "OFF"), 2)
-    elseif id == "toggle-interp" then
-        local cur = mp.get_property_bool("interpolation")
-        mp.set_property_bool("interpolation", not cur)
-        mp.osd_message("Interpolation: " .. (not cur and "ON" or "OFF"), 2)
-    elseif id:match("^track%-(%d+)") then
-        local tid = tonumber(id:match("^track%-(%d+)"))
-        if tid then
-            mp.set_property("vid", tid)
-            mp.osd_message("Video Track: " .. tid, 2)
-        end
-    elseif id:match("^audio%-(%d+)") then
-        local aid = tonumber(id:match("^audio%-(%d+)"))
-        if aid then
-            mp.set_property("aid", aid)
-            mp.osd_message("Audio Track: " .. aid, 2)
-        end
+    local target = tonumber(id:match("^res%-(%d+)$"))
+    if target then
+        apply_local_resolution(target)
+        mp.osd_message("Quality: " .. format.label, 2)
+        return
+    end
+
+    local tid = tonumber(id:match("^track%-(%d+)"))
+    if tid then
+        mp.set_property_number("vid", tid)
+        mp.osd_message("Video track: " .. tid, 2)
+        return
+    end
+    local aid = tonumber(id:match("^audio%-(%d+)"))
+    if aid then
+        mp.set_property_number("aid", aid)
+        mp.osd_message("Audio track: " .. aid, 2)
     end
 end
 
@@ -1051,7 +1043,7 @@ local function local_menu_open(menu_type)
         formats, active_format = build_local_audio_formats()
     end
 
-    text_menu_open(formats, active_format, menu_type)
+    text_menu_open(formats, active_format, menu_type, true)
     open_menu_state = menu_type
 end
 

@@ -4047,12 +4047,14 @@ layouts["tethys"] = function()
         rightSectionWidth = rightSectionWidth + geo.w
     end
 
-    -- btn_quality (Quality selector)
+    -- btn_quality (Quality selector). Wider than an icon slot so "1080p"
+    -- fits without overlapping the PiP button.
+    local qualityW = math.floor(smallButtonSize * 1.6)
     geo = {
-        x = rightX - rightSectionWidth - smallButtonSize/2,
+        x = rightX - rightSectionWidth - qualityW/2,
         y = line1Y + buttonH/2,
         an = 5, -- x,y is center
-        w = smallButtonSize,
+        w = qualityW,
         h = buttonH,
     }
     lo = add_layout("btn_quality")
@@ -4619,8 +4621,25 @@ function osc_init()
 
     --btn_quality
     ne = new_element("btn_quality", "button")
-    -- We can use a bold text string for the quality button icon
-    ne.content = "{\\fs22\\b1}HQ{\\b0}" 
+    -- Live resolution label instead of a static "HQ". Classified by the long
+    -- and short edge so cropped widescreen (1920x800) and vertical video
+    -- (1080x1920) still get the name people expect. Thresholds sit a little
+    -- under the nominal sizes to absorb odd encodes (3840 vs 3836, 4096 DCI).
+    ne.content = function ()
+        -- video-out-params is after the filter chain, so a local downscale
+        -- picked in F6 (quality-menu's @qmres filter) shows up here too.
+        local vp = mp.get_property_native("video-out-params")
+            or mp.get_property_native("video-params")
+        if not vp or not vp.w or not vp.h or vp.w == 0 then return "" end
+        local long, short = math.max(vp.w, vp.h), math.min(vp.w, vp.h)
+        local label
+        if long >= 3600 or short >= 2000 then label = "4K"
+        elseif long >= 2400 or short >= 1400 then label = "2K"
+        elseif long >= 1800 or short >= 1000 then label = "1080p"
+        elseif long >= 1200 or short >= 700 then label = "720p"
+        else label = short .. "p" end
+        return "{\\fs20\\b1}" .. label .. "{\\b0}"
+    end
     ne.eventresponder["mbtn_left_up"] =
         function () mp.commandv("script-binding", "quality_menu/video_formats_toggle") end
 

@@ -19,7 +19,7 @@ This repository contains the configuration and scripts. Install MPV separately, 
 | Feature | What it does |
 |---|---|
 | **Tethys interface** | Borderless player, icon controls, seekbar, track controls and custom menus. |
-| **Streaming quality menu** | Press **F6** to choose a video resolution; **Alt+W** opens audio formats. |
+| **Quality menu** | Press **F6** to choose a stream resolution, or downscale a local file (1080p, 720p, 480p ...); **Alt+W** opens audio. The Tethys bar shows the current resolution. |
 | **Clipboard playback** | Press **Ctrl+V** to open a copied URL or path; supported URL timestamps are applied after loading. |
 | **Watch history** | **Ctrl+H** opens a history grid; **Ctrl+G** browses a YouTube channel's prefetched uploads. |
 | **Picture-in-picture** | **P** toggles a smaller always-on-top window. |
@@ -93,7 +93,8 @@ Try **Space** to pause, **F** for fullscreen, **P** for PiP and **Ctrl+H** for h
 | **M** | Mute |
 | **W / S** | Speed ±0.1× |
 | **F1 / F2 / F3** | Set speed to 2× / 1.5× / 1× |
-| **F6 / Alt+W** | Streaming video / audio format menu |
+| **F6 / Alt+W** | Video / audio quality menu (stream formats, or resolution for local files) |
+| **Right-click** | Play / pause |
 | **Ctrl+V** | Play the clipboard URL/path |
 | **Ctrl+H / Ctrl+G** | Watch history / YouTube channel uploads |
 | **P** | Toggle picture-in-picture |

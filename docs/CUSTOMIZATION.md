@@ -31,7 +31,7 @@ The base configuration uses `gpu-next`, D3D11 and `d3d11va`, with audio-clock sy
 
 If a GPU/codec combination does not support the explicit hardware decoder, try `hwdec=auto-safe` or `hwdec=no` to diagnose. Alt+H toggles between this preset's D3D11VA and software modes. Measure before selecting a different graphics API.
 
-Local menu profile selections and interaction with RGX have known issues. Prefer deliberate edits or console commands until those paths are fixed. See [Known issues](KNOWN_ISSUES.md).
+For local files, F6 lists the original resolution plus every standard lower one (1080p, 720p, 480p ...). A lower choice downscales on the GPU with `d3d11vpp` (or the `scale` filter when decoding in software), so it reduces rendering load, not decoding load. The choice resets for each new file. The Tethys quality button shows the current output resolution (720p / 1080p / 2K / 4K) and opens the same menu.
 
 ## Fonts and subtitles
 

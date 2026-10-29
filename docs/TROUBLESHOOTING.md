@@ -25,17 +25,13 @@ Seekbar hover thumbnails are intentionally disabled, and their worker is not inc
 
 Keep `enabled=no` in `script-opts/loading_preview.conf`. Its optional ffmpeg job currently delays media loading. The history/channel features also prefetch background data, even when their menus stay closed. Missing/stalled network dependencies can make those features sluggish. SponsorBlock is optional and inactive by default because its retry bug can repeatedly contact the API.
 
-## F6 works on streams but fails on local files
-
-This snapshot has a known local-selection callback-scope bug. Until fixed, use F6 for streaming formats and adjust local rendering in mpv.conf/the console. See [Known issues](KNOWN_ISSUES.md). Reinstalling MPV alone will not repair a Lua script bug.
-
 ## PiP size, position or always-on-top behaves strangely
 
 There are known geometry, maximize and temporary-state issues. Press P to leave PiP, then F to change fullscreen state deliberately. To reset persisted preferences, close MPV and rename `portable_config/window-state.json`; the next launch uses defaults. Avoid combining this setup with another window/PiP manager.
 
 ## Colors look unusual
 
-Toggle Alt+E off. RGX applies saturation, contrast and gamma changes; no CAS sharpening shader is bundled. If you intentionally use a local quality-menu action, it can conflict with RGX's private state. HDR output also depends on Windows HDR settings and your actual display; this preset is not a display-calibration profile.
+Toggle Alt+E off. RGX applies saturation, contrast and gamma changes; no CAS sharpening shader is bundled. HDR output also depends on Windows HDR settings and your actual display; this preset is not a display-calibration profile.
 
 ## A font looks different
 
