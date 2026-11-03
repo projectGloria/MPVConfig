@@ -3,6 +3,9 @@ local mp = require "mp"
 local utils = require "mp.utils"
 local M = {}
 
+local cached_stdout = nil
+local cached_json = nil
+
 function M.video_id(url)
     url = (url or ""):gsub("^ytdl://", "")
     local host, path = url:match("^https?://([^/]+)(/.*)$")
@@ -18,7 +21,14 @@ end
 function M.get(url)
     local result = mp.get_property_native("user-data/mpv/ytdl/json-subprocess-result")
     if type(result) ~= "table" or result.status ~= 0 or not result.stdout then return nil end
-    local json = utils.parse_json(result.stdout)
+    local json
+    if result.stdout == cached_stdout then
+        json = cached_json
+    else
+        json = utils.parse_json(result.stdout)
+        cached_stdout = result.stdout
+        cached_json = type(json) == "table" and json or nil
+    end
     if type(json) ~= "table" then return nil end
     url = (url or ""):gsub("^ytdl://", "")
     local id = M.video_id(url)

@@ -36,9 +36,39 @@ local metadata = dofile(mp.command_native({"expand-path", "~~/script-modules/ytd
 local channel_cache, fetch_in_progress = {}, {}
 local current_channel, pending_fetch_timer
 local generation, pending_next = 0, false
+local SEP = "|||"
+
+local function publish_shared_channel_videos(channel_url, items)
+    if not channel_url or not items or #items == 0 then return end
+    local shared = mp.get_property_native("user-data/ytdl/channel-videos")
+    if type(shared) ~= "table" then shared = {} end
+    shared[channel_url] = items
+    shared.channel_url = channel_url
+    shared.items = items
+    mp.set_property_native("user-data/ytdl/channel-videos", shared)
+end
 
 local function fetch_channel_videos(channel_url, on_done)
     if channel_cache[channel_url] then on_done(channel_cache[channel_url]); return end
+    local shared = mp.get_property_native("user-data/ytdl/channel-videos")
+    if type(shared) == "table" then
+        local list = shared[channel_url] or (shared.channel_url == channel_url and shared.items) or nil
+        if type(list) == "table" and #list > 0 then
+            local urls = {}
+            for _, item in ipairs(list) do
+                if type(item) == "table" and (item.url or item.path) then
+                    table.insert(urls, item.url or item.path)
+                elseif type(item) == "string" then
+                    table.insert(urls, item)
+                end
+            end
+            if #urls > 0 then
+                channel_cache[channel_url] = urls
+                on_done(urls)
+                return
+            end
+        end
+    end
     if fetch_in_progress[channel_url] then
         table.insert(fetch_in_progress[channel_url], on_done)
         return
@@ -46,18 +76,33 @@ local function fetch_channel_videos(channel_url, on_done)
     fetch_in_progress[channel_url] = {on_done}
     mp.command_native_async({
         name = "subprocess", capture_stdout = true, playback_only = false,
-        args = {YTDLP, "--no-warnings", "--flat-playlist", "--print", "url",
+        args = {YTDLP, "--no-warnings", "--flat-playlist", "--print", "url" .. SEP .. "%(title)s",
                 "--playlist-end", tostring(FETCH_COUNT), channel_url:gsub("/+$", "") .. "/videos"}
     }, function(success, result)
         local waiters = fetch_in_progress[channel_url]
         fetch_in_progress[channel_url] = nil
-        local urls = {}
+        local urls, shared_items = {}, {}
+        local sep_pattern = "^(.-)" .. SEP:gsub("%p", "%%%0") .. "(.*)$"
         if success and result and result.status == 0 then
             for line in (result.stdout or ""):gmatch("[^\r\n]+") do
-                if metadata.video_id(line) then table.insert(urls, line) end
+                local raw_url, title = line:match(sep_pattern)
+                local candidate = raw_url or line
+                local vid = metadata.video_id(candidate)
+                if vid then
+                    table.insert(urls, candidate)
+                    table.insert(shared_items, {
+                        id = vid,
+                        url = candidate,
+                        path = candidate,
+                        title = (title and title ~= "" and title ~= "NA") and title or candidate,
+                    })
+                end
             end
         end
-        if #urls > 0 then channel_cache[channel_url] = urls end
+        if #urls > 0 then
+            channel_cache[channel_url] = urls
+            publish_shared_channel_videos(channel_url, shared_items)
+        end
         for _, callback in ipairs(waiters) do callback(channel_cache[channel_url]) end
     end)
 end

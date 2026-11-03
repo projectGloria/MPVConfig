@@ -71,8 +71,10 @@ local props = { "saturation", "contrast", "gamma" }
 -- portable_config/shaders/CAS.glsl is not shipped with this repo. Appending a missing
 -- shader makes gpu-next log an error on every load, so only touch the list if it exists.
 local CAS_PATH = "~~/shaders/CAS.glsl"
+local CAS_EXPANDED_PATH = mp.command_native({"expand-path", CAS_PATH})
+local utils = require "mp.utils"
 local function cas_available()
-    local info = require("mp.utils").file_info(mp.command_native({"expand-path", CAS_PATH}))
+    local info = utils.file_info(CAS_EXPANDED_PATH)
     return info ~= nil and info.is_file
 end
 
@@ -83,14 +85,15 @@ local function apply_enhance()
     for prop, value in pairs(PROFILE) do
         mp.set_property_number(prop, value)
     end
-    if cas_available() then
+    local has_cas = cas_available()
+    if has_cas then
         mp.commandv("change-list", "glsl-shaders", "append", CAS_PATH)
     end
     enhanced = true
     show_center(
-        cas_available() and "RGX Enhance (AMD CAS)  —  ON" or "RGX Enhance  —  ON",
+        has_cas and "RGX Enhance (AMD CAS)  —  ON" or "RGX Enhance  —  ON",
         string.format("%s  ·  Sat +%d  ·  Con +%d",
-            cas_available() and "AMD CAS Shader Active" or "CAS.glsl missing: colour only",
+            has_cas and "AMD CAS Shader Active" or "CAS.glsl missing: colour only",
             PROFILE.saturation, PROFILE.contrast),
         3
     )

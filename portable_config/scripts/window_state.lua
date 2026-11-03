@@ -22,8 +22,8 @@ local o = {
     default_geometry = "50%:50%",
     -- How long to wait after leave-fullscreen before restoring geometry (seconds).
     fs_settle = 0.12,
-    -- Poll interval for display-change detection (seconds). 0 = disable poll.
-    display_poll = 2.0,
+    -- Poll interval for display-change detection (seconds). 0 = disable poll (display-names observer handles it).
+    display_poll = 0,
     -- Max concurrent size-lock applies after file load.
     lock_delay = 0.18,
     -- Persist ontop / border across sessions.

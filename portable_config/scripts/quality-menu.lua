@@ -403,18 +403,101 @@ local function process_json_string(json)
     return process_json(json_table)
 end
 
-local function sanitize_format_id(id, formats)
-    return id or (formats[1] or {}).id or ''
+local default_ytdl_format = mp.get_property('ytdl-format') or ''
+
+local function get_configured_format()
+    local conf = mp.get_property('options/ytdl-format')
+    if conf and conf ~= '' then return conf end
+    return default_ytdl_format
 end
 
-local function format_string(video_id, audio_id)
-    if #video_id > 0 and #audio_id > 0 then return video_id .. '+' .. audio_id
-    elseif #video_id > 0 then return video_id
-    elseif #audio_id > 0 then return audio_id
-    else return '' end
+local function resolve_existing_video_id(active_id, video_formats)
+    if active_id and active_id ~= '' then
+        return active_id
+    end
+    -- Try current playing video height
+    local current_h = mp.get_property_number('video-params/h')
+    if not current_h or current_h <= 0 then
+        -- Try configured default height limit from ytdl-format option
+        local conf = get_configured_format()
+        current_h = tonumber(conf:match('height<=%s*%??%s*(%d+)'))
+    end
+    video_formats = video_formats or (current_url and url_data[current_url] and url_data[current_url].video_formats) or (opts.predefined_data and opts.predefined_data.video_formats)
+    if current_h and video_formats then
+        for _, f in ipairs(video_formats) do
+            local h = tonumber(tostring(f.id):match('height<=%s*%??%s*(%d+)'))
+            if h and h == current_h then
+                return f.id
+            end
+        end
+        local best_match = nil
+        local best_diff = nil
+        for _, f in ipairs(video_formats) do
+            local h = tonumber(tostring(f.id):match('height<=%s*%??%s*(%d+)'))
+            if h and h >= current_h then
+                local diff = h - current_h
+                if not best_diff or diff < best_diff then
+                    best_diff = diff
+                    best_match = f.id
+                end
+            end
+        end
+        if best_match then return best_match end
+    end
+    return (video_formats and video_formats[1] or {}).id or ''
+end
+
+local function resolve_existing_audio_id(active_id, audio_formats)
+    if active_id and active_id ~= '' then
+        return active_id
+    end
+    audio_formats = audio_formats or (current_url and url_data[current_url] and url_data[current_url].audio_formats) or (opts.predefined_data and opts.predefined_data.audio_formats)
+    return (audio_formats and audio_formats[1] or {}).id or 'bestaudio'
+end
+
+local function sanitize_format_id(id, formats)
+    return id or ''
+end
+
+local function format_string(video_id, audio_id, video_formats, audio_formats)
+    video_id = video_id or ''
+    audio_id = audio_id or ''
+
+    -- If both are empty (Auto), restore the configured format from mpv.conf
+    if #video_id == 0 and #audio_id == 0 then
+        return get_configured_format()
+    end
+
+    -- If one stream is Auto (empty) while the other is specified, substitute
+    -- the default/existing stream instead of omitting it:
+    if #video_id == 0 then
+        video_id = resolve_existing_video_id(nil, video_formats)
+    end
+    if #audio_id == 0 then
+        audio_id = resolve_existing_audio_id(nil, audio_formats)
+    end
+
+    -- Group audio fallbacks before combining them with video so fallbacks don't drop video
+    if #audio_id > 0 and audio_id:find('/') and not (audio_id:sub(1, 1) == '(' and audio_id:sub(-1) == ')') then
+        audio_id = '(' .. audio_id .. ')'
+    end
+
+    if #video_id > 0 and #audio_id > 0 then
+        return video_id .. '+' .. audio_id
+    elseif #video_id > 0 then
+        return video_id
+    elseif #audio_id > 0 then
+        return audio_id
+    else
+        return get_configured_format()
+    end
 end
 
 local function set_format(url, video_format, audio_format)
+    if not url_data[url] then
+        url_data[url] = {}
+        for k, v in pairs(opts.predefined_data) do url_data[url][k] = v end
+    end
     if (url_data[url].video_active_id ~= video_format or url_data[url].audio_active_id ~= audio_format) then
         url_data[url].video_active_id = video_format
         url_data[url].audio_active_id = audio_format
@@ -439,7 +522,7 @@ local function text_menu_open(formats, active_format, menu_type, is_local)
             break
         end
     end
-    if active_format == '' and not is_local then
+    if (active_format == nil or active_format == '') and not is_local then
         active = #formats + 1
         selected = active
     end
@@ -647,9 +730,16 @@ local function text_menu_open(formats, active_format, menu_type, is_local)
         local data = url_data[current_url]
         if menu_type.is_video then
             video_id = id
-            audio_id = sanitize_format_id(data.audio_active_id, data.audio_formats)
+            audio_id = data and data.audio_active_id or ''
+            if video_id == '' and (audio_id == '' or audio_id == nil) then
+                audio_id = ''
+            end
         else
-            video_id = sanitize_format_id(data.video_active_id, data.video_formats)
+            if id == '' and (not data or not data.video_active_id or data.video_active_id == '') then
+                video_id = ''
+            else
+                video_id = resolve_existing_video_id(data and data.video_active_id, data and data.video_formats)
+            end
             audio_id = id
         end
         set_format(current_url, video_id, audio_id)
@@ -695,7 +785,7 @@ local function uosc_menu_open(formats, active_format, menu_type)
         italic = true,
         muted = true,
         hint = '—',
-        active = active_format == '',
+        active = (active_format == nil or active_format == ''),
         value = {
             'script-message-to',
             script_name,
@@ -1091,21 +1181,34 @@ end)
 mp.add_hook('on_load', 9, function()
     local path = mp.get_property('path')
     local data = url_data[path]
-    if not (data and data.video_active_id and data.audio_active_id) then return end
-    local format = format_string(data.video_active_id, data.audio_active_id)
-    mp.set_property('file-local-options/ytdl-format', format)
+    if not (data and (data.video_active_id ~= nil or data.audio_active_id ~= nil)) then return end
+    local format = format_string(data.video_active_id, data.audio_active_id, data.video_formats, data.audio_formats)
+    if format and format ~= '' then
+        mp.set_property('file-local-options/ytdl-format', format)
+    end
 end)
 
 mp.register_script_message('video-format-set', function(url, format_id)
     menu_close()
     local data = url_data[url]
-    set_format(url, format_id, sanitize_format_id(data.audio_active_id, data.audio_formats))
+    local audio_id = data and data.audio_active_id or ''
+    local video_id = format_id
+    if video_id == '' and (audio_id == '' or audio_id == nil) then
+        audio_id = ''
+    end
+    set_format(url, video_id, audio_id)
 end)
 
 mp.register_script_message('audio-format-set', function(url, format_id)
     menu_close()
     local data = url_data[url]
-    set_format(url, sanitize_format_id(data.video_active_id, data.video_formats), format_id)
+    local video_id
+    if format_id == '' and (not data or not data.video_active_id or data.video_active_id == '') then
+        video_id = ''
+    else
+        video_id = resolve_existing_video_id(data and data.video_active_id, data and data.video_formats)
+    end
+    set_format(url, video_id, format_id)
 end)
 
 mp.register_script_message('uosc-version', function(version)

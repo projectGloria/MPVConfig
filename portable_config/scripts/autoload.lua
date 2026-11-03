@@ -4,7 +4,7 @@
 -- alphabetically, and adds entries before and after the current file to
 -- the internal playlist. (It stops if it would add an already existing
 -- playlist entry at the same position - this makes it "stable".)
--- Add at most 5000 * 2 files when starting a file (before + after).
+-- Add at most 500 * 2 files when starting a file (before + after).
 
 --[[
 To configure this script use file autoload.conf in directory script-opts (the "script-opts"
@@ -32,7 +32,7 @@ ignore_patterns=^~,^bak-,%.bak$
 
 --]]
 
-local MAX_ENTRIES = 5000
+local MAX_ENTRIES = 500
 local MAX_DIR_STACK = 20
 
 local msg = require 'mp.msg'

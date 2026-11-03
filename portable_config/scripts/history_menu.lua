@@ -39,6 +39,7 @@ local max_entries = options.max_entries
 local menu_open          = false
 local channel_mode       = false  -- true: grid shows a channel's uploads, not watch history
 local history            = {}
+local persisted_history  = nil    -- in-memory cache of mpv-history.txt
 local selected           = 1
 local record_timer       = nil
 local status_msg         = ""
@@ -57,7 +58,8 @@ local BASE_THUMB_H = 168
 local BASE_CARD_W  = 320
 local BASE_CARD_H  = 244
 local BASE_GRID_PAD = 24
-local BASE_OVERLAY_ID = 50
+local BASE_OVERLAY_ID = 0
+local MAX_OVERLAY_ID  = 63
 
 -- Runtime scaled card geometry (updated every draw_menu / get_grid_dimensions).
 local CARD_W, CARD_H = BASE_CARD_W, BASE_CARD_H
@@ -105,6 +107,8 @@ end)
 local function ensure_thumb_dir()
     if thumb_dir_created then return end
     thumb_dir_created = true
+    local fi = utils.file_info(thumb_dir)
+    if fi and fi.is_dir then return end
     local td = thumb_dir:gsub("/", "\\")
     mp.command_native({
         name          = "subprocess",
@@ -254,8 +258,8 @@ local function get_source_name(path)
 end
 
 local function clear_thumbnails()
-    for i = 0, 40 do
-        mp.command_native({"overlay-remove", BASE_OVERLAY_ID + i})
+    for id = BASE_OVERLAY_ID, MAX_OVERLAY_ID do
+        mp.command_native({"overlay-remove", id})
     end
 end
 
@@ -326,7 +330,7 @@ local function add_to_history(path, title, source, thumb, is_update)
     source = clean_text(source)
     if source == "" then source = source_from_url(path) end
 
-    local old_list  = read_history()
+    local old_list  = persisted_history or read_history()
     local new_list  = {}
     local norm_path = path  -- already normalized above
 
@@ -355,11 +359,17 @@ local function add_to_history(path, title, source, thumb, is_update)
 
     for _, item in ipairs(old_list) do
         if normalize_url(item.path) ~= norm_path then
-            table.insert(new_list, item)
+            if #new_list < max_entries then
+                table.insert(new_list, item)
+            else
+                -- Sweep orphaned thumbnail when pruning old record beyond max_entries
+                local old_tf = thumb_file(item.thumb)
+                if old_tf then os.remove(old_tf) end
+            end
         end
-        if #new_list >= max_entries then break end
     end
 
+    persisted_history = new_list
     write_history(new_list)
 end
 
@@ -603,19 +613,50 @@ draw_menu = function()
         -- Thumbnail image (only when the card can fit the base bitmap)
         local has_thumb = false
         local thumb_path = thumb_file(item.thumb)
-        if can_blit_thumb and thumb_path then
+        local overlay_id = BASE_OVERLAY_ID + idx
+        if not item.thumb and item.yt_id then
+            local tid = thumb_id(item.path)
+            local tpath = thumb_file(tid)
+            if valid_thumbnail(tpath) then
+                item.thumb = tid
+                thumb_path = tpath
+            elseif can_blit_thumb then
+                ensure_thumb_dir()
+                local yid = item.yt_id
+                enqueue_thumb(tid, {
+                    "ffmpeg", "-y", "-loglevel", "error", "-i",
+                    "https://i.ytimg.com/vi/" .. yid .. "/mqdefault.jpg", "-frames:v", "1",
+                    "-vf", string.format("scale=%d:%d", BASE_THUMB_W, BASE_THUMB_H),
+                    "-pix_fmt", "bgra", "-f", "rawvideo", tpath
+                }, function(ok, res)
+                    -- Only publish the thumb once ffmpeg finished, never a half-written file.
+                    if ok and res and res.status == 0 and valid_thumbnail(tpath) then
+                        item.thumb = tid
+                        thumb_cache[tpath] = true
+                        if menu_open then
+                            last_rendered_page = ""
+                            draw_menu()
+                        end
+                    end
+                end)
+            end
+        end
+        if can_blit_thumb and thumb_path and overlay_id <= MAX_OVERLAY_ID then
             local cached = thumb_cache[thumb_path]
             if cached == nil then
-                local f = io.open(thumb_path, "rb")
-                cached = f ~= nil
-                if f then f:close() end
+                cached = valid_thumbnail(thumb_path)
+                if not cached then
+                    local f = io.open(thumb_path, "rb")
+                    cached = f ~= nil
+                    if f then f:close() end
+                end
                 thumb_cache[thumb_path] = cached
             end
             if cached then
                 has_thumb = true
                 if page_changed then
                     mp.command_native({
-                        "overlay-add", BASE_OVERLAY_ID + idx,
+                        "overlay-add", overlay_id,
                         math.floor(tfx), math.floor(tfy),
                         thumb_path, 0, "bgra", BASE_THUMB_W, BASE_THUMB_H, BASE_THUMB_W * 4
                     })
@@ -702,13 +743,34 @@ local function delete_selected()
     -- Channel items are a transient fetch, not persisted history: nothing to delete.
     if channel_mode then return end
     local item = history[selected]
+    if not item then return end
     local removed = item.title or item.path
     local tf = thumb_file(item.thumb)
     if tf then os.remove(tf) end
-    table.remove(history, selected)
+
+    local target_norm = normalize_url(item.path)
+    local latest = read_history()
+    local updated = {}
+    local removed_any = false
+    for _, h in ipairs(latest) do
+        if not removed_any and normalize_url(h.path) == target_norm then
+            removed_any = true
+        else
+            table.insert(updated, h)
+        end
+    end
+    write_history(updated)
+    persisted_history = updated
+    history = updated
+
     invalidate_thumb_cache()
     if selected > #history then selected = math.max(1, #history) end
-    write_history(history)
+    if #history == 0 then
+        close_menu()
+        show_overlay({ "Played History", "", "History is empty." }, 3)
+        return
+    end
+    draw_menu()
     set_status("Removed: " .. clean_text(removed):sub(1, 60), 2)
 end
 
@@ -744,6 +806,7 @@ end
 
 local function show_history()
     local list = read_history()
+    persisted_history = list
     if #list == 0 then
         show_overlay({ "Played History", "", "History is empty." }, 5)
         return
@@ -756,21 +819,50 @@ local function toggle_history()
 end
 
 -- ── Channel uploads (Ctrl+G) ──────────────────────────────────────────────────
--- Everything is prefetched silently after a YouTube video loads: channel
--- resolve -> flat upload list -> thumbnails via the shared ffmpeg queue. The
--- key press only opens an already-populated grid.
+-- Channel metadata/uploads are prefetched after a YouTube video loads (sharing
+-- the channel list with youtube-channel-next.lua when available), while
+-- thumbnail generation is deferred until the menu page is actually rendered.
 local CHANNEL_FETCH_COUNT = 30
-local CHANNEL_FETCH_DELAY = 5.0  -- after record_current's 2s, so we don't pile onto stream startup
+local CHANNEL_FETCH_DELAY = 5.0  -- after record_current's 2s and youtube-channel-next's 3s
 local SEP = "|||"
 local channel_cache  = {}   -- channel_url -> items (session-lifetime)
 local channel_items  = nil  -- items for the currently playing video's channel
 local channel_gen    = 0
 local channel_timer  = nil
 
+local function build_channel_item(id, title, channel_name)
+    local url = "https://www.youtube.com/watch?v=" .. id
+    local tid = thumb_id(url)
+    local tpath = thumb_file(tid)
+    return {
+        title = clean_text(title),
+        source = channel_name,
+        path = url,
+        yt_id = id,
+        count = 1,
+        thumb = valid_thumbnail(tpath) and tid or nil,
+    }
+end
+
 local function fetch_channel_items(channel_url, channel_name, gen)
     if channel_cache[channel_url] then
         if gen == channel_gen then channel_items = channel_cache[channel_url] end
         return
+    end
+    local shared = mp.get_property_native("user-data/ytdl/channel-videos")
+    if type(shared) == "table" and shared.channel_url == channel_url and type(shared.items) == "table" and #shared.items > 0 then
+        local items = {}
+        local src = (channel_name and channel_name ~= "") and channel_name or (shared.channel_name or "YouTube")
+        for _, entry in ipairs(shared.items) do
+            if type(entry) == "table" and entry.id and #entry.id == 11 then
+                table.insert(items, build_channel_item(entry.id, entry.title or entry.id, src))
+            end
+        end
+        if #items > 0 then
+            channel_cache[channel_url] = items
+            if gen == channel_gen then channel_items = items end
+            return
+        end
     end
     mp.command_native_async({
         name = "subprocess", playback_only = false, capture_stdout = true, capture_stderr = false,
@@ -779,33 +871,21 @@ local function fetch_channel_items(channel_url, channel_name, gen)
     }, function(success, result)
         if not (success and result and result.status == 0) then return end
         local items = {}
+        local shared_items = {}
         for line in (result.stdout or ""):gmatch("[^\r\n]+") do
             local id, title = line:match("^([%w_-]+)" .. SEP:gsub("%p", "%%%0") .. "(.*)$")
             if id and #id == 11 then
-                local url = "https://www.youtube.com/watch?v=" .. id
-                local tid = thumb_id(url)
-                local tpath = thumb_file(tid)
-                local item = {
-                    title = clean_text(title), source = channel_name, path = url, count = 1,
-                    thumb = valid_thumbnail(tpath) and tid or nil,
-                }
-                table.insert(items, item)
-                if not item.thumb then
-                    ensure_thumb_dir()
-                    enqueue_thumb(tid, {
-                        "ffmpeg", "-y", "-loglevel", "error", "-i",
-                        "https://i.ytimg.com/vi/" .. id .. "/mqdefault.jpg", "-frames:v", "1",
-                        "-vf", string.format("scale=%d:%d", BASE_THUMB_W, BASE_THUMB_H),
-                        "-pix_fmt", "bgra", "-f", "rawvideo", tpath
-                    }, function(ok, res)
-                        -- Only publish the thumb once ffmpeg finished, never a half-written file.
-                        if ok and res and res.status == 0 and valid_thumbnail(tpath) then item.thumb = tid end
-                    end)
-                end
+                table.insert(items, build_channel_item(id, title, channel_name))
+                table.insert(shared_items, { id = id, title = clean_text(title), url = "https://www.youtube.com/watch?v=" .. id })
             end
         end
         if #items == 0 then return end
         channel_cache[channel_url] = items
+        mp.set_property_native("user-data/ytdl/channel-videos", {
+            channel_url = channel_url,
+            channel_name = channel_name,
+            items = shared_items,
+        })
         if gen == channel_gen then channel_items = items end
     end)
 end

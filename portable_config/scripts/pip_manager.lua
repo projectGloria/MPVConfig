@@ -29,6 +29,7 @@ local wait_observer
 -- Without this, exit left autofit-larger/geometry at the old window size
 -- (capping every later file) and always forced ontop off.
 local pre = nil
+local restoring_pre = nil
 
 -- What other scripts see. Kept separate from pip_active because some exits
 -- must hide PiP from window_state a moment later than PiP really ends.
@@ -95,7 +96,12 @@ end
 
 local function enter_pip()
     cancel_pending()
-    capture_pre()
+    if restoring_pre then
+        pre = restoring_pre
+        restoring_pre = nil
+    else
+        capture_pre()
+    end
 
     -- Snapshot the preferred size while the window is still a normal window.
     -- A forced snapshot in fullscreen/maximized would save the screen size.
@@ -138,8 +144,9 @@ end
 
 local function exit_pip()
     cancel_pending()
-    local p = pre or { ontop = false, autofit = "", geometry = "" }
+    local p = pre or restoring_pre or { ontop = false, autofit = "", geometry = "" }
     pre = nil
+    restoring_pre = nil
     local gen = generation
 
     if p.fullscreen or p.maximized then
@@ -167,6 +174,7 @@ local function exit_pip()
     -- Without this, WxH alone keeps the window stuck in a corner (often bottom-left).
     mp.set_property("geometry", NORMAL_GEOMETRY)
 
+    restoring_pre = p
     local w, h = p.w, p.h
     -- Step 2: after the WM settles, restore the previous pixel size (centered).
     after(0.08, gen, function()
@@ -182,11 +190,13 @@ local function exit_pip()
                 -- Leave the options as they were before PiP so later files
                 -- are sized by window_state's rules, not by this window.
                 restore_options(p)
+                restoring_pre = nil
             end)
         else
             mp.set_property_number("window-scale", 1.0)
             mp.set_property("geometry", NORMAL_GEOMETRY)
             restore_options(p)
+            restoring_pre = nil
         end
     end)
 

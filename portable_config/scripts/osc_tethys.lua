@@ -364,215 +364,209 @@ local osc_styles = {
 ---- Tooltip Utils
 -- See MPV's stats.lua for a full example (Shortcut: I + 4)
 -- https://github.com/mpv-player/mpv/blob/master/player/lua/stats.lua#L433
-local bindings = mp.get_property_native("input-bindings", {})
-local active = {}  -- map: key-name -> bind-info
-for _, bind in pairs(bindings) do
-    if bind.priority >= 0 and (
-           not active[bind.key] or
-           (active[bind.key].is_weak and not bind.is_weak) or
-           (bind.is_weak == active[bind.key].is_weak and
-            bind.priority > active[bind.key].priority)
-       ) and not bind.cmd:find("script-binding stats/__forced_", 1, true)
-    then
-        active[bind.key] = bind
-    end
-end
-local ordered = {}
-for _, bind in pairs(active) do
-    table.insert(ordered, bind)
-    _,_, bind.mods = bind.key:find("(.*)%+.")
-    _, bind.mods_count = bind.key:gsub("%+.", "")
-end
-table.sort(ordered, function(a, b)
-    if a.subject ~= b.subject then
-        return a.subject < b.subject
-    elseif a.mods_count ~= b.mods_count then
-        return a.mods_count < b.mods_count
-    elseif a.mods ~= b.mods then
-        return a.mods < b.mods
-    elseif a.key:len() ~= b.key:len() then
-        return a.key:len() < b.key:len()
-    elseif a.key:lower() ~= b.key:lower() then
-        return a.key:lower() < b.key:lower()
-    else
-        return a.key > b.key  -- only case differs, lowercase first
-    end
-end)
--- for _, bind in pairs(ordered) do
---     jsonstr, err = utils.format_json(bind)
---     print(jsonstr)
--- end
-
-function isIgnored(bind, ignoredKeys)
-    for _, ignoredKey in pairs(ignoredKeys) do
-        if bind.key == ignoredKey then
-            return true
-        end
-    end
-    return false
-end
-function grepBindByCmd(pattern, ignoredKeys)
-    ignoredKeys = ignoredKeys or {}
-    local cmdBinds = {}
-    for _, bind in pairs(ordered) do
-        local ignored = isIgnored(bind, ignoredKeys)
-        if not ignored and bind.cmd:find(pattern) then
-            -- print(bind.key, bind.cmd)
-            cmdBinds[#cmdBinds+1] = bind
-        end
-    end
-    return cmdBinds
-end
-
-function grepSeekBinds(ignoredKeys)
-    ignoredKeys = ignoredKeys or {}
-    local backBinds = {}
-    local frwdBinds = {}
-    for _, bind in pairs(ordered) do
-        if isIgnored(bind, ignoredKeys) then
-            -- skip
-        elseif bind.cmd:find("^seek(%s+)(%-[%d%.]+)") then
-            backBinds[#backBinds+1] = bind
-        elseif bind.cmd:find("^no%-osd(%s+)seek(%s+)(%-[%d%.]+)") then
-            backBinds[#backBinds+1] = bind
-        elseif bind.cmd:find("^seek(%s+)(%+?[%d%.]+)") then
-            frwdBinds[#frwdBinds+1] = bind
-        elseif bind.cmd:find("^no%-osd(%s+)seek(%s+)(%+?[%d%.]+)") then
-            frwdBinds[#frwdBinds+1] = bind
-        end
-    end
-    return backBinds, frwdBinds
-end
-function grepSpeedBinds(ignoredKeys)
-    ignoredKeys = ignoredKeys or {}
-    local downBinds = {}
-    local upBinds = {}
-    for _, bind in pairs(ordered) do
-        if isIgnored(bind, ignoredKeys) then
-            -- skip
-        elseif bind.cmd:find("^add(%s+)speed(%s+)(%+?[%d%.]+)$") then
-            upBinds[#upBinds+1] = bind
-        elseif bind.cmd:find("^add(%s+)speed(%s+)(%-[%d%.]+)$") then
-            downBinds[#downBinds+1] = bind
-        elseif bind.cmd:find("^multiply(%s+)speed(%s+)([%d%.]+)/([%d%.]+)$") then
-            local num, den = bind.cmd:match("^multiply%s+speed%s+([%d%.]+)/([%d%.]+)$")
-            num = tonumber(num) -- numerator
-            den = tonumber(den) -- denominator
-            if num < den then
-                downBinds[#downBinds+1] = bind
-            else
-                upBinds[#upBinds+1] = bind
-            end
-        elseif bind.cmd:find("^multiply(%s+)speed(%s+)([%d%.]+)$") then
-            local x = bind.cmd:match("^multiply%s+speed%s+([%d%.]+)$")
-            x = tonumber(x)
-            if x < 1 then
-                downBinds[#downBinds+1] = bind
-            else
-                upBinds[#upBinds+1] = bind
-            end
-        end
-    end
-    return downBinds, upBinds
-end
-
-function humanBindKey(key)
-    if key == 'PGUP' then return 'PgUp'
-    elseif key == 'PGDWN' then return 'PgDn'
-    elseif key == 'UP' then return '⇧'
-    elseif key == 'DOWN' then return '⇩'
-    elseif key == 'LEFT' then return '⇦'
-    elseif key == 'RIGHT' then return '⇨'
-    elseif key == 'Shift+UP' then return 'Shift ⇧'
-    elseif key == 'Shift+DOWN' then return 'Shift ⇩'
-    elseif key == 'Shift+LEFT' then return 'Shift ⇦'
-    elseif key == 'Shift+RIGHT' then return 'Shift ⇨'
-    elseif key == 'WHEEL_UP' then return 'Scroll Up'
-    elseif key == 'WHEEL_DOWN' then return 'Scroll Down'
-    elseif key == 'SHARP' then return '#'
-    elseif key == 'BS' then return 'Backspace'
-    elseif key == '{' then return '\\{'
-    elseif key == '}' then return '\\}'
-    else return key
-    end
-end
-function formatBindKey(key)
-    return tethysStyle.buttonKeybindFormat:format(humanBindKey(key))
-end
-function formatBinds(binds)
-    local str = ""
-    for i, bind in pairs(binds) do
-        if i ~= 1 then -- lua arrays start at 1
-            str = str .. " or "
-        end
-        str = str .. formatBindKey(bind.key)
-    end
-    return str
-end
-function formatSeekBind(bind)
-    local seekBy
-    if bind.cmd:match("^no%-osd%s+seek") then
-        seekBy = bind.cmd:match("^no%-osd%s+seek%s+([%+%-]?[%d%.]+)")
-    else
-        seekBy = bind.cmd:match("^seek%s+([%+%-]?[%d%.]+)")
-    end
-    seekBy = tonumber(seekBy) -- Note: +0.1 is parsed okay
-    local label
-    if seekBy < 0 then
-        return ("Back %ss %s"):format(-seekBy, formatBindKey(bind.key))
-    else
-        return ("Forward %ss %s"):format(seekBy, formatBindKey(bind.key))
-    end
-end
-function formatSeekBinds(binds)
-    local list = {}
-    for i, bind in pairs(binds) do
-        table.insert(list, formatSeekBind(bind))
-    end
-    return list
-end
-
----- Filter bindings by commands using regex
----- Keys passed into grepBindByCmd() are ignored.
--- %s+ = One or more spaces
--- %- = A literal dash '-'
--- %-? = May or may not contain a dash
--- %d+ = One or more digits from 0 to 9
--- (%-?%d+) = Positive or negative integer
-local pauseBinds = grepBindByCmd("^cycle(%s+)pause", {"p", "PLAYPAUSE", "MBTN_RIGHT", "PLAY", "PAUSE"})
-local seekBackBinds, seekFrwdBinds = grepSeekBinds({"REWIND", "Shift+PGDWN", "FORWARD", "Shift+PGUP"})
-local muteBinds = grepBindByCmd("^cycle(%s+)mute", {"MUTE"})
-local volDnBinds = grepBindByCmd("^add(%s+)volume(%s+)(%-%d+)", {"VOLUME_DOWN", "WHEEL_LEFT"})
-local volUpBinds = grepBindByCmd("^add(%s+)volume(%s+)(%d+)", {"VOLUME_UP", "WHEEL_RIGHT"})
-local plPrevBinds = grepBindByCmd("^playlist%-prev", {"PREV", "MBTN_BACK"})
-local plNextBinds = grepBindByCmd("^playlist%-next", {"NEXT", "MBTN_FORWARD"})
-local chPrevBinds = grepBindByCmd("^add chapter (%-%d+)", {})
-local chNextBinds = grepBindByCmd("^add chapter (%d+)", {})
-local audioBinds = grepBindByCmd("^cycle(%s+)audio", {})
-local subBinds = grepBindByCmd("^cycle(%s+)sub$", {})
-local speedResetBinds = grepBindByCmd("^set(%s+)speed(%s+)1", {})
-local speedDnBinds, speedUpBinds = grepSpeedBinds()
-local fullscreenBinds = grepBindByCmd("^cycle(%s+)fullscreen", {"MBTN_LEFT_DBL"})
----- Generate tooltips
-local pauseTooltip = ("Play %s"):format(formatBinds(pauseBinds))
-local seekBackTooltip = formatSeekBinds(seekBackBinds)
-local seekFrwdTooltip = formatSeekBinds(seekFrwdBinds)
-local muteTooltip = formatBinds(muteBinds)
-local volDnTooltip = formatBinds(volDnBinds)
-local volUpTooltip = formatBinds(volUpBinds)
-local volTooltip = ("Mute %s\\NVolume Up %s\\NVolume Down %s"):format(muteTooltip, volUpTooltip, volDnTooltip)
-local plPrevTooltip = ("Previous %s"):format(formatBinds(plPrevBinds))
-local plNextTooltip = ("Next %s"):format(formatBinds(plNextBinds))
-local chPrevTooltip = ("Prev Chapter %s"):format(formatBinds(chPrevBinds))
-local chNextTooltip = ("Next Chapter %s"):format(formatBinds(chNextBinds))
-local audioTooltip = ("Audio Track %s"):format(formatBinds(audioBinds))
-local subTooltip = ("Subtitle Track %s"):format(formatBinds(subBinds))
-local speedResetTooltip = formatBinds(speedResetBinds)
-local speedDnTooltip = formatBinds(speedDnBinds)
-local speedUpTooltip = formatBinds(speedUpBinds)
-local speedTooltip = ("Reset %s\\NFaster %s\\NSlower %s"):format(speedResetTooltip, speedUpTooltip, speedDnTooltip)
+local pauseTooltip, volTooltip, plPrevTooltip, plNextTooltip = "", "", "", ""
+local chPrevTooltip, chNextTooltip, audioTooltip, subTooltip = "", "", "", ""
+local speedTooltip, fullscreenTooltip = "", ""
+local seekBackTooltip, seekFrwdTooltip = {}, {}
 local pipTooltip = "Picture In Picture"
-local fullscreenTooltip = ("Fullscreen %s"):format(formatBinds(fullscreenBinds))
+
+if tethys.showShortcutTooltip then
+    local bindings = mp.get_property_native("input-bindings", {})
+    local active = {}  -- map: key-name -> bind-info
+    for _, bind in pairs(bindings) do
+        if bind.priority >= 0 and (
+               not active[bind.key] or
+               (active[bind.key].is_weak and not bind.is_weak) or
+               (bind.is_weak == active[bind.key].is_weak and
+                bind.priority > active[bind.key].priority)
+           ) and not bind.cmd:find("script-binding stats/__forced_", 1, true)
+        then
+            active[bind.key] = bind
+        end
+    end
+    local ordered = {}
+    for _, bind in pairs(active) do
+        table.insert(ordered, bind)
+        _,_, bind.mods = bind.key:find("(.*)%+.")
+        _, bind.mods_count = bind.key:gsub("%+.", "")
+    end
+    table.sort(ordered, function(a, b)
+        if a.subject ~= b.subject then
+            return a.subject < b.subject
+        elseif a.mods_count ~= b.mods_count then
+            return a.mods_count < b.mods_count
+        elseif a.mods ~= b.mods then
+            return a.mods < b.mods
+        elseif a.key:len() ~= b.key:len() then
+            return a.key:len() < b.key:len()
+        elseif a.key:lower() ~= b.key:lower() then
+            return a.key:lower() < b.key:lower()
+        else
+            return a.key > b.key  -- only case differs, lowercase first
+        end
+    end)
+
+    local function isIgnored(bind, ignoredKeys)
+        for _, ignoredKey in pairs(ignoredKeys) do
+            if bind.key == ignoredKey then
+                return true
+            end
+        end
+        return false
+    end
+    local function grepBindByCmd(pattern, ignoredKeys)
+        ignoredKeys = ignoredKeys or {}
+        local cmdBinds = {}
+        for _, bind in pairs(ordered) do
+            local ignored = isIgnored(bind, ignoredKeys)
+            if not ignored and bind.cmd:find(pattern) then
+                cmdBinds[#cmdBinds+1] = bind
+            end
+        end
+        return cmdBinds
+    end
+
+    local function grepSeekBinds(ignoredKeys)
+        ignoredKeys = ignoredKeys or {}
+        local backBinds = {}
+        local frwdBinds = {}
+        for _, bind in pairs(ordered) do
+            if isIgnored(bind, ignoredKeys) then
+                -- skip
+            elseif bind.cmd:find("^seek(%s+)(%-[%d%.]+)") then
+                backBinds[#backBinds+1] = bind
+            elseif bind.cmd:find("^no%-osd(%s+)seek(%s+)(%-[%d%.]+)") then
+                backBinds[#backBinds+1] = bind
+            elseif bind.cmd:find("^seek(%s+)(%+?[%d%.]+)") then
+                frwdBinds[#frwdBinds+1] = bind
+            elseif bind.cmd:find("^no%-osd(%s+)seek(%s+)(%+?[%d%.]+)") then
+                frwdBinds[#frwdBinds+1] = bind
+            end
+        end
+        return backBinds, frwdBinds
+    end
+    local function grepSpeedBinds(ignoredKeys)
+        ignoredKeys = ignoredKeys or {}
+        local downBinds = {}
+        local upBinds = {}
+        for _, bind in pairs(ordered) do
+            if isIgnored(bind, ignoredKeys) then
+                -- skip
+            elseif bind.cmd:find("^add(%s+)speed(%s+)(%+?[%d%.]+)$") then
+                upBinds[#upBinds+1] = bind
+            elseif bind.cmd:find("^add(%s+)speed(%s+)(%-[%d%.]+)$") then
+                downBinds[#downBinds+1] = bind
+            elseif bind.cmd:find("^multiply(%s+)speed(%s+)([%d%.]+)/([%d%.]+)$") then
+                local num, den = bind.cmd:match("^multiply%s+speed%s+([%d%.]+)/([%d%.]+)$")
+                num = tonumber(num)
+                den = tonumber(den)
+                if num < den then
+                    downBinds[#downBinds+1] = bind
+                else
+                    upBinds[#upBinds+1] = bind
+                end
+            elseif bind.cmd:find("^multiply(%s+)speed(%s+)([%d%.]+)$") then
+                local x = bind.cmd:match("^multiply%s+speed%s+([%d%.]+)$")
+                x = tonumber(x)
+                if x < 1 then
+                    downBinds[#downBinds+1] = bind
+                else
+                    upBinds[#upBinds+1] = bind
+                end
+            end
+        end
+        return downBinds, upBinds
+    end
+
+    local function humanBindKey(key)
+        if key == 'PGUP' then return 'PgUp'
+        elseif key == 'PGDWN' then return 'PgDn'
+        elseif key == 'UP' then return '⇧'
+        elseif key == 'DOWN' then return '⇩'
+        elseif key == 'LEFT' then return '⇦'
+        elseif key == 'RIGHT' then return '⇨'
+        elseif key == 'Shift+UP' then return 'Shift ⇧'
+        elseif key == 'Shift+DOWN' then return 'Shift ⇩'
+        elseif key == 'Shift+LEFT' then return 'Shift ⇦'
+        elseif key == 'Shift+RIGHT' then return 'Shift ⇨'
+        elseif key == 'WHEEL_UP' then return 'Scroll Up'
+        elseif key == 'WHEEL_DOWN' then return 'Scroll Down'
+        elseif key == 'SHARP' then return '#'
+        elseif key == 'BS' then return 'Backspace'
+        elseif key == '{' then return '\\{'
+        elseif key == '}' then return '\\}'
+        else return key
+        end
+    end
+    local function formatBindKey(key)
+        return tethysStyle.buttonKeybindFormat:format(humanBindKey(key))
+    end
+    local function formatBinds(binds)
+        local str = ""
+        for i, bind in pairs(binds) do
+            if i ~= 1 then
+                str = str .. " or "
+            end
+            str = str .. formatBindKey(bind.key)
+        end
+        return str
+    end
+    local function formatSeekBind(bind)
+        local seekBy
+        if bind.cmd:match("^no%-osd%s+seek") then
+            seekBy = bind.cmd:match("^no%-osd%s+seek%s+([%+%-]?[%d%.]+)")
+        else
+            seekBy = bind.cmd:match("^seek%s+([%+%-]?[%d%.]+)")
+        end
+        seekBy = tonumber(seekBy)
+        if seekBy < 0 then
+            return ("Back %ss %s"):format(-seekBy, formatBindKey(bind.key))
+        else
+            return ("Forward %ss %s"):format(seekBy, formatBindKey(bind.key))
+        end
+    end
+    local function formatSeekBinds(binds)
+        local list = {}
+        for _, bind in pairs(binds) do
+            table.insert(list, formatSeekBind(bind))
+        end
+        return list
+    end
+
+    local pauseBinds = grepBindByCmd("^cycle(%s+)pause", {"p", "PLAYPAUSE", "MBTN_RIGHT", "PLAY", "PAUSE"})
+    local seekBackBinds, seekFrwdBinds = grepSeekBinds({"REWIND", "Shift+PGDWN", "FORWARD", "Shift+PGUP"})
+    local muteBinds = grepBindByCmd("^cycle(%s+)mute", {"MUTE"})
+    local volDnBinds = grepBindByCmd("^add(%s+)volume(%s+)(%-%d+)", {"VOLUME_DOWN", "WHEEL_LEFT"})
+    local volUpBinds = grepBindByCmd("^add(%s+)volume(%s+)(%d+)", {"VOLUME_UP", "WHEEL_RIGHT"})
+    local plPrevBinds = grepBindByCmd("^playlist%-prev", {"PREV", "MBTN_BACK"})
+    local plNextBinds = grepBindByCmd("^playlist%-next", {"NEXT", "MBTN_FORWARD"})
+    local chPrevBinds = grepBindByCmd("^add chapter (%-%d+)", {})
+    local chNextBinds = grepBindByCmd("^add chapter (%d+)", {})
+    local audioBinds = grepBindByCmd("^cycle(%s+)audio", {})
+    local subBinds = grepBindByCmd("^cycle(%s+)sub$", {})
+    local speedResetBinds = grepBindByCmd("^set(%s+)speed(%s+)1", {})
+    local speedDnBinds, speedUpBinds = grepSpeedBinds()
+    local fullscreenBinds = grepBindByCmd("^cycle(%s+)fullscreen", {"MBTN_LEFT_DBL"})
+
+    pauseTooltip = ("Play %s"):format(formatBinds(pauseBinds))
+    seekBackTooltip = formatSeekBinds(seekBackBinds)
+    seekFrwdTooltip = formatSeekBinds(seekFrwdBinds)
+    local muteTooltip = formatBinds(muteBinds)
+    local volDnTooltip = formatBinds(volDnBinds)
+    local volUpTooltip = formatBinds(volUpBinds)
+    volTooltip = ("Mute %s\\NVolume Up %s\\NVolume Down %s"):format(muteTooltip, volUpTooltip, volDnTooltip)
+    plPrevTooltip = ("Previous %s"):format(formatBinds(plPrevBinds))
+    plNextTooltip = ("Next %s"):format(formatBinds(plNextBinds))
+    chPrevTooltip = ("Prev Chapter %s"):format(formatBinds(chPrevBinds))
+    chNextTooltip = ("Next Chapter %s"):format(formatBinds(chNextBinds))
+    audioTooltip = ("Audio Track %s"):format(formatBinds(audioBinds))
+    subTooltip = ("Subtitle Track %s"):format(formatBinds(subBinds))
+    local speedResetTooltip = formatBinds(speedResetBinds)
+    local speedDnTooltip = formatBinds(speedDnBinds)
+    local speedUpTooltip = formatBinds(speedUpBinds)
+    speedTooltip = ("Reset %s\\NFaster %s\\NSlower %s"):format(speedResetTooltip, speedUpTooltip, speedDnTooltip)
+    fullscreenTooltip = ("Fullscreen %s"):format(formatBinds(fullscreenBinds))
+end
 -- print("pauseTooltip", pauseTooltip)
 -- print("seekBackTooltip", utils.format_json(seekBackTooltip))
 -- print("seekFrwdTooltip", utils.format_json(seekFrwdTooltip))
@@ -1624,8 +1618,8 @@ function render_elements(master_ass)
                 local cachebarY1 = seekbarY1 + 1
                 local cachebarY2 = seekbarY2 - 1
                 for _,range in pairs(seekRanges or {}) do
-                    local pstart = get_slider_ele_pos_for(element, range["start"])
-                    local pend = get_slider_ele_pos_for(element, range["end"])
+                    local pstart = math.floor(get_slider_ele_pos_for(element, range["start"]) * 2 + 0.5) / 2
+                    local pend = math.floor(get_slider_ele_pos_for(element, range["end"]) * 2 + 0.5) / 2
                     -- Note: round_rect_ccw(x0, y0, x1, y1, r1, r2)
                     -- elem_ass:round_rect_ccw(
                     --     pstart,
@@ -2133,10 +2127,7 @@ function window_controls(topbar)
     -- Window Title
     ne = new_element("wctitle", "button")
     ne.content = function ()
-        local title = mp.command_native({"expand-text", user_opts.title})
-        -- escape ASS, and strip newlines and trailing slashes
-        title = title:gsub("\\n", " "):gsub("\\$", ""):gsub("{","\\{")
-        return not (title == "") and title or "mpv"
+        return get_formatted_title()
     end
     local vertPad = (wc_geo.h - tethys.windowTitleSize)/2
     local leftPad = vertPad
@@ -3242,6 +3233,35 @@ end
 
 local UNICODE_MINUS = string.char(0xe2, 0x88, 0x92) -- UTF-8 for U+2212 MINUS SIGN
 
+function get_formatted_title()
+    if state.cached_title == nil then
+        local title = mp.command_native({"expand-text", user_opts.title}) or ""
+        title = title:gsub("\\n", " "):gsub("\\$", ""):gsub("{","\\{")
+        state.cached_title = not (title == "") and title or "mpv"
+    end
+    return state.cached_title
+end
+
+function get_quality_label()
+    if state.cached_quality_label == nil then
+        local vp = mp.get_property_native("video-out-params")
+            or mp.get_property_native("video-params")
+        if not vp or not vp.w or not vp.h or vp.w == 0 then
+            state.cached_quality_label = ""
+        else
+            local long, short = math.max(vp.w, vp.h), math.min(vp.w, vp.h)
+            local label
+            if long >= 3600 or short >= 2000 then label = "4K"
+            elseif long >= 2400 or short >= 1400 then label = "2K"
+            elseif long >= 1800 or short >= 1000 then label = "1080p"
+            elseif long >= 1200 or short >= 700 then label = "720p"
+            else label = short .. "p" end
+            state.cached_quality_label = "{\\fs20\\b1}" .. label .. "{\\b0}"
+        end
+    end
+    return state.cached_quality_label
+end
+
 -- OSC INIT
 function osc_init()
     msg.debug("osc_init")
@@ -3290,11 +3310,11 @@ function osc_init()
     ne = new_element("title", "button")
 
     ne.content = function ()
-        local title = state.forced_title or
-                      mp.command_native({"expand-text", user_opts.title})
-        -- escape ASS, and strip newlines and trailing slashes
-        title = title:gsub("\\n", " "):gsub("\\$", ""):gsub("{","\\{")
-        return not (title == "") and title or "mpv"
+        if state.forced_title then
+            local title = state.forced_title:gsub("\\n", " "):gsub("\\$", ""):gsub("{","\\{")
+            return not (title == "") and title or "mpv"
+        end
+        return get_formatted_title()
     end
 
     ne.eventresponder["mbtn_left_up"] = function ()
@@ -3506,19 +3526,7 @@ function osc_init()
     -- (1080x1920) still get the name people expect. Thresholds sit a little
     -- under the nominal sizes to absorb odd encodes (3840 vs 3836, 4096 DCI).
     ne.content = function ()
-        -- video-out-params is after the filter chain, so a local downscale
-        -- picked in F6 (quality-menu's @qmres filter) shows up here too.
-        local vp = mp.get_property_native("video-out-params")
-            or mp.get_property_native("video-params")
-        if not vp or not vp.w or not vp.h or vp.w == 0 then return "" end
-        local long, short = math.max(vp.w, vp.h), math.min(vp.w, vp.h)
-        local label
-        if long >= 3600 or short >= 2000 then label = "4K"
-        elseif long >= 2400 or short >= 1400 then label = "2K"
-        elseif long >= 1800 or short >= 1000 then label = "1080p"
-        elseif long >= 1200 or short >= 700 then label = "720p"
-        else label = short .. "p" end
-        return "{\\fs20\\b1}" .. label .. "{\\b0}"
+        return get_quality_label()
     end
     ne.eventresponder["mbtn_left_up"] =
         function () mp.commandv("script-binding", "quality_menu/video_formats_toggle") end
@@ -3543,7 +3551,7 @@ function osc_init()
     ne.slider.markerF = function ()
         local duration = mp.get_property_number("duration", nil)
         if not (duration == nil) then
-            local chapters = mp.get_property_native("chapter-list", {})
+            local chapters = state.chapter_list or {}
             local markers = {}
             for n = 1, #chapters do
                 markers[n] = (chapters[n].time / duration * 100)
@@ -3623,7 +3631,7 @@ function osc_init()
             -- Source: https://github.com/maoiscat/mpv-osc-morden/blob/main/morden.lua#L1395-L1413
             local duration = mp.get_property_number("duration", nil)
             if not (duration == nil) then
-                local chapters = mp.get_property_native("chapter-list", {})
+                local chapters = state.chapter_list or {}
                 if #chapters > 0 then
                     local pos = get_slider_value(element)
                     local ch = #chapters
@@ -3904,6 +3912,15 @@ function osc_visible(visible)
     request_tick()
 end
 
+local function osc_needs_periodic_tick()
+    return state.osc_visible
+        or state.anitype ~= nil
+        or state.idle
+        or state.initREQ
+        or state.marginsREQ
+        or (state.message_hide_timer and state.message_hide_timer:is_enabled())
+end
+
 function pause_state(name, enabled)
     state.paused = enabled
     request_tick()
@@ -3911,7 +3928,9 @@ end
 
 function cache_state(name, st)
     state.cache_state = st
-    request_tick()
+    if osc_needs_periodic_tick() then
+        request_tick()
+    end
 end
 
 -- Request that tick() is called (which typically re-renders the OSC).
@@ -4361,9 +4380,28 @@ validate_user_opts()
 update_duration_watch()
 
 mp.register_event("shutdown", shutdown)
-mp.register_event("start-file", request_init)
+mp.register_event("start-file", function()
+    state.cached_title = nil
+    state.cached_quality_label = nil
+    request_init()
+end)
+mp.observe_property("media-title", "string", function()
+    state.cached_title = nil
+    if osc_needs_periodic_tick() then request_tick() end
+end)
+mp.observe_property("video-out-params", "native", function()
+    state.cached_quality_label = nil
+    if osc_needs_periodic_tick() then request_tick() end
+end)
+mp.observe_property("video-params", "native", function()
+    state.cached_quality_label = nil
+    if osc_needs_periodic_tick() then request_tick() end
+end)
 mp.observe_property("track-list", nil, request_init)
-mp.observe_property("playlist", nil, request_init)
+mp.observe_property("playlist", nil, function()
+    state.cached_title = nil
+    request_init()
+end)
 mp.observe_property("chapter-list", "native", function(_, list)
     list = list or {}  -- safety, shouldn't return nil
     table.sort(list, function(a, b) return a.time < b.time end)
@@ -4423,7 +4461,9 @@ mp.observe_property("vo-configured", "bool", function(name, val)
     request_tick()
 end)
 mp.observe_property("playback-time", "number", function(name, val)
-    request_tick()
+    if osc_needs_periodic_tick() then
+        request_tick()
+    end
 end)
 mp.observe_property("osd-dimensions", "native", function(name, val)
     -- (we could use the value instead of re-querying it all the time, but then

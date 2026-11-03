@@ -98,7 +98,9 @@ local function check_single_instance()
             local cmd = string.format('{"command": ["loadfile", "%s", "%s"]}\n', escape_json(file_path), mode)
             f:write(cmd)
         end
-        f:write('{"command": ["set_property", "pause", false]}\n')
+        if o.action ~= "append" then
+            f:write('{"command": ["set_property", "pause", false]}\n')
+        end
     end
 
     if o.unminimize then
