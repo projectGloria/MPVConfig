@@ -47,6 +47,13 @@ local tethys = {
     tooltipColor = "CCCCCC",
     windowBarColor = "000000",
     windowBarAlpha = 255, -- (80 is mpv default) (255 morden default)
+    -- Rounded box behind the window (video/stream) title so it stays readable
+    -- on bright video. Alpha 255 hides it.
+    windowTitleBoxColor = "000000",
+    windowTitleBoxAlpha = 110,
+    windowTitleBoxPadX = 10,
+    windowTitleBoxPadY = 5,
+    windowTitleBoxRadius = 6,
     windowButtonColor = "CCCCCC",
     closeButtonHoveredColor = "1111DD", -- #DD1111
     seekbarHandleColor = "FFFFFF",
@@ -1203,6 +1210,28 @@ function add_area(name, x1, y1, x2, y2)
     table.insert(osc_param.areas[name], {x1=x1, y1=y1, x2=x2, y2=y2})
 end
 
+-- Width of rendered ASS text in OSC (playres) coordinates, measured by libass
+-- through a hidden overlay. Cached: the title only changes on file change.
+local measure_overlay, measure_cache, measure_count = nil, {}, 0
+function measure_text_width(style, text)
+    local rx, ry = math.floor(osc_param.playresx + 0.5), math.floor(osc_param.playresy + 0.5)
+    if rx <= 0 or ry <= 0 or not text or text == "" then return nil end
+    local key = rx .. "x" .. ry .. "\0" .. style .. "\0" .. text
+    local w = measure_cache[key]
+    if w == nil then
+        if measure_count >= 64 then measure_cache, measure_count = {}, 0 end
+        measure_overlay = measure_overlay or mp.create_osd_overlay("ass-events")
+        measure_overlay.res_x, measure_overlay.res_y = rx, ry
+        measure_overlay.hidden = true
+        measure_overlay.compute_bounds = true
+        measure_overlay.data = "{\\an7\\pos(0,0)}" .. style .. text
+        local r = measure_overlay:update()
+        w = (r and r.x0 and r.x1 and r.x1 > r.x0) and (r.x1 - r.x0) or false
+        measure_cache[key], measure_count = w, measure_count + 1
+    end
+    return w or nil
+end
+
 function ass_append_alpha(ass, alpha, modifier)
     local ar = {}
 
@@ -1795,6 +1824,29 @@ function render_elements(master_ass)
                 master_ass:merge(shadow_ass)
             end
 
+            -- Background box sized to the text (window title)
+            local text_box = button_lo.text_box
+            if text_box and text_box.alpha < 255 then
+                local tw = measure_text_width(text_box.measure_style, buttontext)
+                if tw then
+                    local geo = element.layout.geometry
+                    local boxW = math.min(tw + 2 * text_box.pad_x, text_box.max_w)
+                    local boxH = text_box.h
+                    -- Written straight into master_ass: new_event() on an empty
+                    -- assdraw object adds no line break, so a merged box would
+                    -- join the previous element's event and take its \pos.
+                    -- \r resets alignment too, so it must come before \pos/\an.
+                    master_ass:new_event()
+                    master_ass:append(("{\\rDefault\\blur0\\bord0\\shad0\\1c&H%s&}"):format(text_box.color))
+                    master_ass:pos(geo.x - text_box.pad_x, geo.y)
+                    master_ass:an(4)
+                    ass_append_alpha(master_ass, {[1] = text_box.alpha, [2] = 255, [3] = 255, [4] = 255}, 0)
+                    master_ass:draw_start()
+                    master_ass:round_rect_cw(0, 0, boxW, boxH, text_box.radius, text_box.radius)
+                    master_ass:draw_stop()
+                end
+            end
+
             elem_ass:append(buttontext)
 
             -- Tooltip
@@ -2161,7 +2213,10 @@ function window_controls(topbar)
         return get_formatted_title()
     end
     local vertPad = (wc_geo.h - tethys.windowTitleSize)/2
-    local leftPad = vertPad
+    local boxPadX = tethys.windowTitleBoxPadX
+    local showTitleBox = tethys.windowTitleBoxAlpha < 255
+    -- With the box, its left edge sits where the text used to start.
+    local leftPad = showTitleBox and (vertPad + boxPadX) or vertPad
     local rightPad = vertPad * 2
     lo = add_layout("wctitle")
     lo.geometry = {
@@ -2180,6 +2235,17 @@ function window_controls(topbar)
         wc_geo.y + tethys.windowTitleOutline
     )
     lo.alpha[3] = 0 -- show text outline (aka border)
+    if showTitleBox then
+        lo.button.text_box = {
+            measure_style = tethysStyle.windowTitle,
+            color = tethys.windowTitleBoxColor,
+            alpha = tethys.windowTitleBoxAlpha,
+            pad_x = boxPadX,
+            h = tethys.windowTitleSize + 2 * tethys.windowTitleBoxPadY,
+            radius = tethys.windowTitleBoxRadius,
+            max_w = titlebox_right - rightPad - lo.geometry.x + 2 * boxPadX,
+        }
+    end
 
     add_area("window-controls-title",
              titlebox_left, 0, titlebox_right, wc_geo.h)
