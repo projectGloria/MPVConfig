@@ -9,6 +9,7 @@ local tethys = {
     -- Config
     showPictureInPictureButton = true,
     showSpeedButton = true,
+    showTwitchPoints = true, -- Channel-points balance while twitch_points.lua is earning
     showShortcutTooltip = true, -- Show name and shortcut of buttons on hover
     showChapterTooltip = true, -- Show chapter above timestamp in seekbar tooltip
     skipBy = 5, -- skipback/skipfrwd amount in seconds
@@ -183,6 +184,8 @@ local tethysIcon_skipfrwd = "{\\p1}m 0 0   m 28 28   m 25.488102 -0   l 25.48810
 local tethysIcon_replay_off = "{\\p1}m 0 0   m 28 28   m 14 3 b 8.5 3 4 7.5 4 13 b 4 18.5 8.5 23 14 23 b 19.5 23 24 18.5 24 13 b 24 7.5 19.5 3 14 3 m 14 6.2 b 17.7 6.2 20.8 9.3 20.8 13 b 20.8 16.7 17.7 19.8 14 19.8 b 10.3 19.8 7.2 16.7 7.2 13 b 7.2 9.3 10.3 6.2 14 6.2 m 9 9 l 19 19 l 17.2 20.8 l 7.2 10.8 l 9 9 {\\p0}"
 local tethysIcon_replay_one = "{\\p1}m 0 0   m 28 28   m 14 3 b 8.5 3 4 7.5 4 13 b 4 18.5 8.5 23 14 23 b 18.2 23 21.7 20.6 23.3 17.2 l 20.6 16.1 b 19.5 18.3 17 19.8 14 19.8 b 10.3 19.8 7.2 16.7 7.2 13 b 7.2 9.3 10.3 6.2 14 6.2 b 16.5 6.2 18.7 7.5 20 9.5 l 16.2 9.5 l 16.2 12.8 l 24.5 12.8 l 24.5 4.5 l 21.3 4.5 b 19.3 3.5 16.8 3 14 3 {\\p0}"
 local tethysIcon_replay_all = "{\\p1}m 0 0   m 28 28   m 11 3 b 6.5 3 3 6.8 3 11.5 b 3 16.2 6.5 20 11 20 b 14.2 20 16.9 18.2 18.1 15.6 l 15.9 14.7 b 15.1 16.3 13.2 17.3 11 17.3 b 7.9 17.3 5.5 14.8 5.5 11.5 b 5.5 8.2 7.9 5.7 11 5.7 b 13 5.7 14.7 6.7 15.7 8.2 l 12.8 8.2 l 12.8 10.8 l 19.2 10.8 l 19.2 4.4 l 16.8 4.4 b 15.3 3.5 13.2 3 11 3 m 18 14 l 25 14 l 25 16 l 18 16 l 18 14 m 18 18 l 25 18 l 25 20 l 18 20 l 18 18 m 18 22 l 25 22 l 25 24 l 18 24 l 18 22 {\\p0}"
+-- Generic coin: ring + four-point sparkle (twitch_points balance)
+local tethysIcon_points = "{\\p1}m 0 0   m 28 28   m 14 1.5 b 7.096 1.5 1.5 7.096 1.5 14 b 1.5 20.904 7.096 26.5 14 26.5 b 20.904 26.5 26.5 20.904 26.5 14 b 26.5 7.096 20.904 1.5 14 1.5 m 14 4.3 b 19.357 4.3 23.7 8.643 23.7 14 b 23.7 19.357 19.357 23.7 14 23.7 b 8.643 23.7 4.3 19.357 4.3 14 b 4.3 8.643 8.643 4.3 14 4.3 m 14 7.5 l 15.7 12.3 l 20.5 14 l 15.7 15.7 l 14 20.5 l 12.3 15.7 l 7.5 14 l 12.3 12.3{\\p0}"
 local tethysIcon_speed = "{\\p1}m 0 0   m 28 28   m 14 2.053711   b 10.414212 2.053711 6.827634 3.417483 4.099609 6.145508   b -1.35644 11.601557 -1.35644 20.490239 4.099609 25.946289   l 6.017578 24.02832   b 1.597151 19.607893 1.597151 12.483903 6.017578 8.063476   b 10.438006 3.64305 17.561994 3.64305 21.982422 8.063476   b 26.402849 12.483903 26.402849 19.607893 21.982422 24.02832   l 23.900391 25.946289   b 29.35644 20.490239 29.35644 11.601557 23.900391 6.145508   b 21.172366 3.417483 17.585788 2.053711 14 2.053711   m 17.886719 10.034179   l 14.351562 13.571289   b 14.235118 13.554564 14.117639 13.54608 14 13.545898   b 13.336959 13.545898 12.701074 13.80929 12.232233 14.278131   b 11.763392 14.746972 11.5 15.382857 11.5 16.045898   b 11.5 17.42661 12.619288 18.545898 14 18.545898   b 14.663041 18.545898 15.298926 18.282506 15.767767 17.813665   b 16.236608 17.344824 16.5 16.708939 16.5 16.045898   b 16.499911 15.927607 16.491426 15.809472 16.47461 15.692382   l 20.009767 12.155273{\\p0}"
 local tethysIcon_vol_033 = "{\\p1}m 0 0   m 28 28   m 4.710272 20.331519   l 1.360222 18.656494   b 0.489258 18.221011 0.489258 18.221011 0.489258 17.165758   l 0.489258 14   l 0.489258 10.83424   b 0.489258 9.778988 0.48926 9.778988 1.337532 9.354852   l 4.710272 7.668481   m 5.765524 7.674466   l 9.986538 3.453454   b 10.706239 2.706516 12.097044 1.342947 12.097044 3.453454   l 12.097044 24.558517   b 12.097044 26.669023 10.738402 25.263082 9.986538 24.558517   l 5.765524 20.337504   m 16.562393 10.929048   l 14.418911 13.150849   l 14.418911 14.870154   l 16.488207 17.07095   b 17.436586 16.089838 17.82417 15.024196 17.820228 13.983409   b 17.816228 12.942625 17.530838 11.909297 16.562404 10.929049{\\p0}"
 local tethysIcon_vol_066 = "{\\p1}m 0 0   m 28 28   m 4.710272 20.331519   l 1.360222 18.656494   b 0.489258 18.221011 0.489258 18.221011 0.489258 17.165758   l 0.489258 14   l 0.489258 10.83424   b 0.489258 9.778988 0.48926 9.778988 1.337532 9.354852   l 4.710272 7.668481   m 5.765524 7.674466   l 9.986538 3.453454   b 10.706239 2.706516 12.097044 1.342947 12.097044 3.453454   l 12.097044 24.558517   b 12.097044 26.669023 10.738402 25.263082 9.986538 24.558517   l 5.765524 20.337504   m 20.116395 7.368459   l 17.915201 9.643849   b 18.793615 10.494225 19.496549 12.085227 19.477484 14.012366   b 19.458484 15.939505 18.683596 17.529199 17.842625 18.356568   l 20.064426 20.611347   b 21.82241 18.8818 22.618007 16.592612 22.643244 14.04122   b 22.668484 11.489827 21.937955 9.131882 20.116395 7.368459   m 16.562393 10.929048   l 14.418911 13.150849   l 14.418911 14.870154   l 16.488207 17.07095   b 17.436586 16.089838 17.82417 15.024196 17.820228 13.983409   b 17.816228 12.942625 17.530838 11.909297 16.562404 10.929049{\\p0}"
@@ -226,6 +229,7 @@ if iconScale ~= 1 then
     tethysIcon_replay_one = scaleIcon(tethysIcon_replay_one, iconScale)
     tethysIcon_replay_all = scaleIcon(tethysIcon_replay_all, iconScale)
     tethysIcon_speed = scaleIcon(tethysIcon_speed, iconScale)
+    tethysIcon_points = scaleIcon(tethysIcon_points, iconScale)
     tethysIcon_vol_033 = scaleIcon(tethysIcon_vol_033, iconScale)
     tethysIcon_vol_066 = scaleIcon(tethysIcon_vol_066, iconScale)
     tethysIcon_vol_100 = scaleIcon(tethysIcon_vol_100, iconScale)
@@ -2978,6 +2982,25 @@ layouts["tethys"] = function()
         rightSectionWidth = rightSectionWidth + geo.w
     end
 
+    -- Twitch channel points (icon + compact balance, e.g. "12.3K")
+    local pointsW = math.floor(smallButtonSize * 2.4)
+    geo = {
+        x = rightX - rightSectionWidth - pointsW/2,
+        y = line1Y + buttonH/2,
+        an = 5, -- x,y is center
+        w = pointsW,
+        h = buttonH,
+    }
+    lo = add_layout("twitch_points")
+    lo.geometry = geo
+    lo.style = tethysStyle.smallButton
+    if tethys.showShortcutTooltip then
+        setButtonTooltip(lo, "Channel points (Alt+p)")
+    end
+    if elements["twitch_points"].visible then
+        rightSectionWidth = rightSectionWidth + geo.w
+    end
+
     -- Subtitle track
     local trackButtonSize = tethys.trackButtonSize
     local trackButtonWidth = calcTrackButtonWidth(tracks_osc.sub)
@@ -3782,6 +3805,31 @@ function osc_init()
     ne.eventresponder["wheel_down_press"] =
         function () mp.commandv("osd-auto", "add", "speed", -0.25) end
 
+    -- twitch_points: published by twitch_points.lua while it is earning
+    ne = new_element("twitch_points", "button")
+    local tp = mp.get_property_native("user-data/twitch_points")
+    ne.visible = tethys.showTwitchPoints and type(tp) == "table" and tp.active == true
+    ne.content = function ()
+        local p = mp.get_property_native("user-data/twitch_points")
+        if type(p) ~= "table" then return "" end
+        local label = "–"
+        local b = tonumber(p.balance)
+        if b then
+            if b >= 1e6 then label = ("%.1fM"):format(b / 1e6)
+            elseif b >= 1e3 then label = ("%.1fK"):format(b / 1e3)
+            else label = tostring(math.floor(b)) end
+            label = label:gsub("%.0([KM])$", "%1")
+        end
+        -- Twitch purple for 5 s after a bonus chest is claimed.
+        local claimed = tonumber(p.claimed_at)
+        local color = (claimed and mp.get_time() - claimed < 5) and "FF4791" or tethys.buttonColor
+        -- \pbo lowers the drawing so the number's cap height centres on the coin.
+        return ("{\\1c&H%s&\\pbo6}%s{\\fn(%s)\\fs21\\b1}\\h%s{\\b0}")
+            :format(color, tethysIcon_points, mp.get_property("options/osd-font"), label)
+    end
+    ne.eventresponder["mbtn_left_up"] =
+        function () mp.commandv("script-binding", "twitch_points/twitch-points-status") end
+
     -- load layout
     layouts[user_opts.layout]()
 
@@ -4454,6 +4502,18 @@ mp.observe_property("loop-file", "string", function() request_tick() end)
 mp.observe_property("loop-playlist", "string", function() request_tick() end)
 -- PiP button icon follows pip_manager's flag (set by p/P too, not just the button)
 mp.observe_property("user-data/pip_manager/active", "native", function() request_tick() end)
+-- Points element appears/disappears with twitch_points activity (layout change);
+-- balance/claim updates only need a redraw.
+local twitch_points_active = false
+mp.observe_property("user-data/twitch_points", "native", function(_, v)
+    local active = type(v) == "table" and v.active == true
+    if active ~= twitch_points_active then
+        twitch_points_active = active
+        request_init()
+    else
+        request_tick()
+    end
+end)
 mp.observe_property("pause", "bool", pause_state)
 mp.observe_property("eof-reached", "bool", function() request_tick() end)
 mp.observe_property("demuxer-cache-state", "native", cache_state)

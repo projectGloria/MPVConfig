@@ -114,7 +114,7 @@ Default MPV keys are disabled. Keys not listed in `input.conf` may be unavailabl
 - **Keyboard shortcuts:** `portable_config/input.conf`.
 - **Download destination:** `portable_config/script-opts/ytdlp_download.conf`. The default is your user folder's `Downloads/mpv`, with partial files in `_incomplete`.
 - **Optional loading covers:** set `enabled=yes` in `script-opts/loading_preview.conf`. The current implementation can slow startup, so the shared preset leaves it off.
-- **Browser cookies:** off by default; enable only when needed in `script-opts/cookies_auto.conf`, using your own profile.
+- **Browser cookies:** on for Twitch and Kick only (`domains=` in `script-opts/cookies_auto.conf`), using a logged-in Firefox profile; YouTube and other sites stay anonymous unless added. With no Firefox cookie store, nothing is attached.
 - **SponsorBlock:** included under [`extras/sponsorblock`](extras/sponsorblock/README.md), outside the auto-loaded scripts. Read its known issue before enabling it.
 
 Most changes need an MPV restart. The [customization guide](docs/CUSTOMIZATION.md) explains the renderer profiles, font settings, scripts and optional features.

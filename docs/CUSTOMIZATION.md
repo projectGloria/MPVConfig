@@ -18,6 +18,7 @@ Edit text files with a UTF-8 editor and restart MPV. In MPV paths, `~~/` means t
 | `script-opts/thumbfast.conf` | Seekbar thumbnail size, hardware decoding, streams on/off, idle shutdown |
 | `script-opts/ytdlp_download.conf` | Completed/partial download directories |
 | `script-opts/cookies_auto.conf` | Optional browser cookie selection |
+| `script-opts/twitch_points.conf` | Twitch channel points while watching (bottom-bar balance: `showTwitchPoints` in `tethys.conf`) |
 | `script-opts/loading_preview.conf` | Optional loading covers and deadline |
 
 Tethys also reads MPV OSC options from `script-opts/osc.conf` if you create it. For example `showwindowed=yes`, `showfullscreen=yes` and `hidetimeout=2000` belong there, not in `tethys.conf`.
@@ -57,7 +58,7 @@ The downloader deliberately reads your usual yt-dlp configuration, which may aff
 
 **Loading cover:** change `enabled=no` to `enabled=yes` in `loading_preview.conf`. FFmpeg must be on PATH. Existing code blocks media opening while preparing a missing cover, so leave it off if startup speed matters. The old `seconds` option was unused and is omitted from the shared options file.
 
-**Cookies:** public videos should first be tried anonymously. For a video requiring authentication, enable `cookies_auto.conf` and select a browser/profile you control. Leave `firefox_profile` empty for automatic selection. Cookie extraction can fail or become stale; the helper retries once without its injected cookies. Never commit browser databases, exported cookies or your private cookie configuration. Refer to [yt-dlp's cookie guidance](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp).
+**Cookies:** public videos should first be tried anonymously. For a video requiring authentication, enable `cookies_auto.conf` and select a browser/profile you control. Leave `firefox_profile` empty for automatic selection. `domains` is a comma-separated list of `youtube`, `twitch`, `kick`, or `all`; the default config sends cookies only to Twitch and Kick, so a logged-in Twitch Turbo or subscriber account plays ad-free and sub-only VODs work. Cookie extraction can fail or become stale; the helper retries once without its injected cookies. Never commit browser databases, exported cookies or your private cookie configuration. Refer to [yt-dlp's cookie guidance](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp).
 
 **SponsorBlock:** instructions are in [the optional extra](../extras/sponsorblock/README.md). It is not active in the default shared preset.
 
@@ -74,6 +75,7 @@ The downloader deliberately reads your usual yt-dlp configuration, which may aff
 | `youtube-channel-next.lua` | Same-channel next-upload navigation |
 | `ytdlp_download.lua` | Separate yt-dlp downloads |
 | `cookies_auto.lua` | Optional browser-cookie injection/fallback |
+| `twitch_points.lua` | Earns Twitch channel points (minute-watched + bonus chest) while a live stream plays unpaused |
 | `loading_preview.lua` | Optional loading covers |
 | `window_state.lua` | Window dimensions/preferences and attempted display recovery |
 | `pip_manager.lua` | PiP toggle and coordination |

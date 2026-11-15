@@ -46,9 +46,12 @@ local o = {
     -- into). Pinning a name is more predictable.
     firefox_profile = "",
 
-    -- Which URLs get cookies attached.
-    --   youtube = youtube.com / youtu.be only  (recommended)
+    -- Which URLs get cookies attached: a comma-separated list of sites, or "all".
+    --   youtube = youtube.com / youtu.be
+    --   twitch  = twitch.tv   (Turbo / subscriber ad-free, sub-only VODs)
+    --   kick    = kick.com    (sub-only VODs)
     --   all     = every network URL
+    -- Example: domains=youtube,twitch,kick
     -- Cookies are domain-scoped by yt-dlp, so "all" does not leak your YouTube
     -- session to unrelated hosts -- but it does read the cookie database on
     -- every single stream, which is slower and pointless for sites that work
@@ -195,11 +198,43 @@ local function is_network(url)
     return url and url:match("^%a[%w+.-]*://") ~= nil
 end
 
+-- Site name -> host suffixes it covers. A host matches a suffix when it equals
+-- it or ends with "." .. suffix, so "notyoutube.com" does not match.
+local SITES = {
+    youtube = { "youtube.com", "youtu.be", "youtube-nocookie.com" },
+    twitch  = { "twitch.tv" },
+    kick    = { "kick.com" },
+}
+
+local scope_all, scope_hosts = false, {}
+for name in o.domains:lower():gmatch("[^,%s]+") do
+    if name == "all" then
+        scope_all = true
+    elseif SITES[name] then
+        for _, h in ipairs(SITES[name]) do scope_hosts[#scope_hosts + 1] = h end
+    else
+        msg.warn("unknown site in domains option: " .. name)
+    end
+end
+
+local function url_host(url)
+    local host = url:match("^%a[%w+.-]*://([^/?#]+)")
+    if not host then return nil end
+    host = host:gsub("^.*@", ""):gsub(":%d+$", "")
+    return host:lower()
+end
+
 local function wants_cookies(url)
     if not is_network(url) then return false end
-    if o.domains == "all" then return true end
-    return url:match("youtube%.com") ~= nil
-        or url:match("youtu%.be")    ~= nil
+    if scope_all then return true end
+    local host = url_host(url)
+    if not host then return false end
+    for _, suffix in ipairs(scope_hosts) do
+        if host == suffix or host:sub(-(#suffix + 1)) == "." .. suffix then
+            return true
+        end
+    end
+    return false
 end
 
 -- ─────────────────────────────────────────────────────────────────────────────

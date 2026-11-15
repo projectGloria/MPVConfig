@@ -57,6 +57,7 @@ local function fixture(name, init_cb)
         for _,v in ipairs(s.observers) do if v.cb==cb then v.dead=true end end
     end
     m.osd_message=function() end
+    m.get_time=function() return s.now or 0 end
     m.create_osd_overlay=function() return {remove=function() end,update=function() end} end
     package.loaded.mp=m
     package.loaded['mp.utils']={
@@ -399,6 +400,98 @@ local function run()
         if j.args[3] == '--flat-playlist' then ytdlp_flat_jobs = ytdlp_flat_jobs + 1 end
     end
     check('history_menu reuses shared channel list and defers channel thumbnails until menu opens', ytdlp_flat_jobs == 0 and #s.jobs == 0)
+
+    -- cookies_auto: per-site scope. Fake profile so no real cookie store is read.
+    local profile=(os.getenv('APPDATA') or '')..'/Mozilla/Firefox/Profiles/test.profile/cookies.sqlite'
+    local function cookie_fixture(domains)
+        local c=fixture('cookies_auto.lua',function(f) f.read_options_override={enabled=true,domains=domains,firefox_profile='test.profile',notify=false} end)
+        c.files[profile]={is_file=true,mtime=1}
+        return c
+    end
+    local function load(c,url) c.props['stream-open-filename']=url; c.props.path=url; c:hook('on_load') end
+    local function cookies_active(c)
+        local last=c.commands[#c.commands]
+        return last~=nil and last[3]=='append'
+    end
+    s=cookie_fixture('twitch,kick')
+    load(s,'https://www.twitch.tv/somechannel')
+    check('Twitch URL gets browser cookies',cookies_active(s) and s.commands[1][4]=='cookies-from-browser=firefox:test.profile')
+    load(s,a)
+    check('YouTube stays anonymous when not in scope',not cookies_active(s))
+    load(s,'https://kick.com/somechannel')
+    check('Kick URL gets browser cookies',cookies_active(s))
+    load(s,'https://nottwitch.tv/x')
+    check('Lookalike host does not get cookies',not cookies_active(s))
+    load(s,'https://m.twitch.tv/videos/123')
+    check('Twitch subdomain gets cookies',cookies_active(s))
+    load(s,'C:/videos/twitch.tv.mkv')
+    check('Local file never gets cookies',not cookies_active(s))
+
+    s=cookie_fixture('youtube')
+    load(s,a)
+    check('Default youtube scope still matches YouTube',cookies_active(s))
+    load(s,'https://www.twitch.tv/somechannel')
+    check('Default youtube scope leaves Twitch anonymous',not cookies_active(s))
+
+    s=cookie_fixture('all')
+    load(s,'https://example.com/stream.m3u8')
+    check('Scope all matches any network URL',cookies_active(s))
+
+    -- twitch_points: HTTP is mocked; auth_token option avoids reading Firefox.
+    local function tp() return fixture('twitch_points.lua',function(f) f.read_options_override={auth_token='tok',interval=60} end) end
+    local function url_of(j) return j.args[#j.args] end
+    local function body_of(j) for i,v in ipairs(j.args) do if v=='--data-binary' then return j.args[i+1] end end end
+    local function reply(j,text,code) j.cb(true,{status=0,stdout=text..'\n'..(code or 200)}) end
+    local stream_ok='{"data":{"user":{"id":"111","stream":{"id":"999"}}}}'
+    local page='<script src="https://static.twitchcdn.net/config/settings.abc123.js"></script>'
+    local function setup(t,login)
+        t.props.path='https://www.twitch.tv/'..login; t:event('start-file'); t:event('file-loaded')
+        reply(t.jobs[1],'{"user_id":"42","login":"me"}')
+        reply(t.jobs[2],stream_ok)
+        reply(t.jobs[3],page)
+        reply(t.jobs[4],[[x={"spade_url":"https:\/\/spade.example\/track"}]])
+    end
+
+    s=tp(); s.props.path='https://www.twitch.tv/videos/12345'; s:event('file-loaded')
+    check('Twitch VOD does not start points tracking',#s.jobs==0)
+    s.props.path='https://www.youtube.com/watch?v=AAAAAAAAAAA'; s:event('file-loaded')
+    check('Non-Twitch URL does not start points tracking',#s.jobs==0)
+
+    s=tp(); setup(s,'somechannel')
+    check('Setup validates token then queries stream, page and settings',
+        url_of(s.jobs[1]):match('oauth2/validate') and url_of(s.jobs[2]):match('gql')
+        and url_of(s.jobs[3])=='https://www.twitch.tv/somechannel' and url_of(s.jobs[4]):match('settings%.abc123%.js'))
+    check('Active state is published for the OSC',s.props['user-data/twitch_points'].active==true
+        and s.props['user-data/twitch_points'].channel=='somechannel')
+    check('Points context is checked immediately after setup',#s.jobs==5 and body_of(s.jobs[5]):match('ChannelPointsContext'))
+    reply(s.jobs[5],'{"data":{"community":{"channel":{"self":{"communityPoints":{"balance":10,"availableClaim":{"id":"c1"}}}}}}}')
+    check('Available bonus is claimed with channel and claim ids',#s.jobs==6
+        and body_of(s.jobs[6]):match('ClaimCommunityPoints') and body_of(s.jobs[6]):match('"claimID":"c1"')
+        and body_of(s.jobs[6]):match('"channelID":"111"'))
+    check('Balance is published for the OSC',s.props['user-data/twitch_points'].balance==10)
+    s.now=7; reply(s.jobs[6],'{"data":{"claimCommunityPoints":{"currentPoints":60}}}')
+    check('Claim publishes new balance and claim time',s.props['user-data/twitch_points'].balance==60
+        and s.props['user-data/twitch_points'].claimed_at==7)
+    s.props.pause=false; s:fire(60)
+    check('Unpaused minute sends minute-watched to spade url',url_of(s.jobs[7])=='https://spade.example/track'
+        and body_of(s.jobs[7]):match('^data='))
+    reply(s.jobs[8],'{"data":{"community":{"channel":{"self":{"communityPoints":{"balance":60,"availableClaim":{"id":"c1"}}}}}}}')
+    check('Claimed id is not claimed twice',#s.jobs==8)
+    s.props.pause=true; s:fire(60)
+    check('Paused minute sends no minute-watched',#s.jobs==9 and body_of(s.jobs[9]):match('ChannelPointsContext'))
+
+    s=tp(); s.props.path='https://www.twitch.tv/chan'; s:event('start-file'); s:event('file-loaded')
+    reply(s.jobs[1],'{"user_id":"42","login":"me"}')
+    s.props.path='https://www.twitch.tv/other'; s:event('start-file')
+    reply(s.jobs[2],stream_ok)
+    check('Stale setup callback after file change does nothing',#s.jobs==2)
+    check('File change publishes inactive state',s.props['user-data/twitch_points'].active==false)
+
+    s=tp(); s.props.path='https://www.twitch.tv/chan'; s:event('start-file'); s:event('file-loaded')
+    reply(s.jobs[1],'{"user_id":"42","login":"me"}')
+    reply(s.jobs[2],'{"data":{"user":{"id":"111","stream":null}}}')
+    s:fire(60)
+    check('Offline channel stops after stream lookup',#s.jobs==2)
 end
 local ok,err=xpcall(run,debug.traceback)
 io=real_io

@@ -60,6 +60,7 @@ To restart immediately, right-click the Tethys play button or enter `script-mess
 | F6 / Alt+W | Video / audio menu: stream formats for URLs; resolution choice (original, 720p, 480p ...) and track choice for local files |
 | Alt+E | RGX color enhancement; sharpening needs the separately supplied CAS shader |
 | Alt+C | Cookie-source status |
+| Alt+P | Twitch channel-points status |
 | Ctrl+V | Open clipboard URL/path |
 | Ctrl+D | Download current network URL with yt-dlp |
 | Ctrl+H | Watch history grid |
