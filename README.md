@@ -22,7 +22,7 @@ This repository contains the configuration and scripts. Install MPV separately, 
 | **Quality menu** | Press **F6** to choose a stream resolution, or downscale a local file (1080p, 720p, 480p ...); **Alt+W** opens audio. The Tethys bar shows the current resolution. |
 | **Clipboard playback** | Press **Ctrl+V** to open a copied URL or path; supported URL timestamps are applied after loading. |
 | **Watch history** | **Ctrl+H** opens a history grid; **Ctrl+G** browses a YouTube channel's prefetched uploads. |
-| **Seekbar thumbnails** | Hovering the seekbar shows a frame preview for local files (thumbfast, generated on demand). |
+| **Seekbar thumbnails** | Hovering the seekbar shows a frame preview: local files via thumbfast (decoded on demand), YouTube via its own storyboard sprite sheets (no video re-download), live streams via frames grabbed at random moments while you watch. |
 | **Picture-in-picture** | **P** toggles a smaller always-on-top window; leaving PiP restores the previous size, fullscreen/maximized state and always-on-top setting. |
 | **Clear feedback** | Custom volume, seek, speed and play/pause indicators. |
 | **Remembered preferences** | Volume, mute, speed and subtitle preferences persist between sessions. |

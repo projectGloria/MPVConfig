@@ -11,7 +11,7 @@ if not real_utils.file_info(root .. "youtube-channel-next.lua") then
 end
 local function fixture(name, init_cb)
     local s = {props={}, events={}, messages={}, timers={}, jobs={}, commands={}, observers={}, files={}, storage={}, removed_files={}, hooks={}, key_bindings={}, pipe_written={}}
-    local m = {msg={info=function() end, error=function() end, warn=function() end, debug=function() end}}
+    local m = {msg={info=function() end, error=function() end, warn=function() end, debug=function() end, verbose=function() end}}
     m.get_script_name=function() return name:gsub('%.lua$', '') end
     m.get_property=function(k,d) local v=s.props[k]; if v==nil then return d end; return v end
     m.get_property_bool=function(k,d) local v=s.props[k]; if v==nil then return d end; return v==true or v=='yes' end
@@ -31,7 +31,8 @@ local function fixture(name, init_cb)
         end
         return {status=0}
     end
-    m.command_native_async=function(a,cb) s.jobs[#s.jobs+1]={args=a.args,cb=cb} end
+    m.command_native_async=function(a,cb) local j={args=a.args,cb=cb,cmd=a}; s.jobs[#s.jobs+1]=j; return j end
+    m.abort_async_command=function() s.aborted=(s.aborted or 0)+1 end
     m.commandv=function(...) s.commands[#s.commands+1]={...} end
     m.command=m.commandv
     m.register_event=function(k,cb) s.events[k]=cb end
@@ -492,6 +493,147 @@ local function run()
     reply(s.jobs[2],'{"data":{"user":{"id":"111","stream":null}}}')
     s:fire(60)
     check('Offline channel stops after stream lookup',#s.jobs==2)
+    -- storyboard.lua: YouTube sprite-sheet seekbar thumbnails
+    local function sb_json(url)
+        local frags={}
+        for i=1,15 do frags[i]={url='https://i.ytimg.com/sb/x/M'..(i-1)..'.jpg',duration=(i<15) and 45 or 5} end
+        return {status=0,stdout=real_utils.format_json({webpage_url=url,formats={
+            {format_id='sb1',format_note='storyboard',width=160,height=90,rows=5,columns=5,fragments={{url='https://i.ytimg.com/sb/x/L2.jpg',duration=635}}},
+            {format_id='sb0',format_note='storyboard',width=320,height=180,rows=3,columns=3,fragments=frags},
+            {format_id='137',width=1920,height=1080},
+        }})}
+    end
+    local function sb_info(s)
+        local last
+        for _,j in ipairs(s.jobs) do
+            if j.cmd[1]=='script-message' and j.cmd[2]=='storyboard-info' then last=real_utils.parse_json(j.cmd[3]) end
+        end
+        return last
+    end
+    local function sb_jobs(s,kind)
+        local r={}
+        for _,j in ipairs(s.jobs) do
+            if (kind=='subprocess' and j.cmd.name=='subprocess') or j.cmd[1]==kind then r[#r+1]=j end
+        end
+        return r
+    end
+    local function sb_out(job) for _,v in ipairs(job.args) do local o=v:match('^%-%-o=(.*)') if o then return o end end end
+    local function sb_done(s,job,size)
+        s.files[sb_out(job)]={size=size or 960*540*4}
+        job.cb(true,{status=0})
+    end
+    local function sbstart(url,props)
+        local s=fixture('storyboard.lua',function(f) f.read_options_override={enabled=true,max_width=256,max_height=256,overlay_id=43,max_sheets=2,prefetch=1,mpv_path='mpv'} end)
+        for k,v in pairs(props or {}) do s.props[k]=v end
+        s.props.path=url; s:event('start-file'); s:event('file-loaded')
+        return s
+    end
+    s=sbstart('C:/video.mkv',{['demuxer-via-network']=false})
+    check('Storyboard is disabled for local files',sb_info(s).disabled==true)
+    s=sbstart(a,{['demuxer-via-network']=true,[result_key]=sb_json(a)})
+    local info=sb_info(s)
+    check('Storyboard picks largest sheet format and fits to max size',info.disabled==false and info.width==256 and info.height==144)
+    s.messages.thumb('100','50.4','60')
+    local subs=sb_jobs(s,'subprocess')
+    check('Hover converts only the needed sheet first',#subs==1 and subs[1].args[#subs[1].args]=='https://i.ytimg.com/sb/x/M2.jpg')
+    sb_done(s,subs[1])
+    local adds=sb_jobs(s,'overlay-add')
+    -- t=100 -> sheet 3 starts at 90, 5 s per tile -> tile 2 (row 0, col 2)
+    check('Ready sheet draws the tile via offset and stride',#adds==1 and adds[1].cmd[2]==43 and adds[1].cmd[3]==50 and adds[1].cmd[4]==60
+        and adds[1].cmd[6]==2*320*4 and adds[1].cmd[8]==320 and adds[1].cmd[9]==180 and adds[1].cmd[10]==960*4 and adds[1].cmd[11]==256 and adds[1].cmd[12]==144)
+    subs=sb_jobs(s,'subprocess')
+    check('Neighbour sheet is prefetched after the hovered one',#subs==2 and subs[2].args[#subs[2].args]=='https://i.ytimg.com/sb/x/M3.jpg')
+    s.messages.thumb('101','50','60')
+    check('Same tile and position is not redrawn',#sb_jobs(s,'overlay-add')==1)
+    s.messages.thumb('110','50','60')
+    adds=sb_jobs(s,'overlay-add')
+    check('Next tile on same sheet is instant',#adds==2 and adds[2].cmd[6]==180*960*4+320*4 and adds[2].cmd[5]==adds[1].cmd[5]
+        and #sb_jobs(s,'subprocess')==2)
+    sb_done(s,subs[2]); subs=sb_jobs(s,'subprocess')
+    sb_done(s,subs[3])
+    check('Sheet farthest from the hover beyond max_sheets is deleted',#s.removed_files==1 and s.removed_files[1]==sb_out(subs[2]))
+    s.messages.clear()
+    check('Clear removes the overlay',sb_jobs(s,'overlay-remove')[1]~=nil)
+    s.messages.thumb('630','0','0')
+    subs=sb_jobs(s,'subprocess')
+    check('Short last sheet is located',subs[#subs].args[#subs[#subs].args]=='https://i.ytimg.com/sb/x/M14.jpg')
+    local pending=subs[#subs]
+    s.props.path=b; s:event('start-file')
+    check('File change deletes cached sheets and aborts conversion',s.aborted==1 and #s.removed_files>=3)
+    local before=#sb_jobs(s,'overlay-add')
+    sb_done(s,pending)
+    check('Stale conversion after file change draws nothing and is deleted',#sb_jobs(s,'overlay-add')==before
+        and s.removed_files[#s.removed_files]==sb_out(pending) and sb_info(s).disabled==true)
+
+    s=sbstart(a,{['demuxer-via-network']=true,[result_key]=sb_json(a)})
+    s.messages.thumb('0','0','0')
+    sb_jobs(s,'subprocess')[1].cb(true,{status=1})
+    sb_jobs(s,'subprocess')[2].cb(true,{status=1})
+    s.messages.thumb('100','0','0')
+    sb_jobs(s,'subprocess')[3].cb(true,{status=1})
+    s.messages.thumb('200','0','0')
+    check('Repeated conversion failures disable storyboard',sb_info(s).disabled==true and #sb_jobs(s,'subprocess')==3)
+    s=sbstart(a,{['demuxer-via-network']=true,[result_key]=sb_json(a)})
+    s.messages.thumb('0','0','0')
+    subs=sb_jobs(s,'subprocess'); sb_done(s,subs[1],123)
+    check('Truncated conversion output is rejected',#sb_jobs(s,'overlay-add')==0 and s.removed_files[1]==sb_out(subs[1]))
+    s=sbstart(a,{['demuxer-via-network']=true,[result_key]=sb_json(b)})
+    check('Storyboard ignores metadata of another video',sb_info(s).disabled==true)
+
+    -- storyboard.lua live mode: random frame captures kept in memory
+    local function livestart()
+        local s=fixture('storyboard.lua',function(f) f.read_options_override={enabled=true,max_width=4,max_height=4,overlay_id=43,
+            max_sheets=2,prefetch=1,mpv_path='mpv',live=true,live_min_interval=20,live_max_interval=60,live_tolerance=60,live_max_frames=2} end)
+        s.props['demuxer-via-network']=true
+        s.props[result_key]={status=0,stdout=real_utils.format_json({webpage_url=a,is_live=true,live_status='is_live',formats={{format_id='96',width=1920,height=1080}}})}
+        s.props['video-out-params']={w=8,h=8}
+        s.props['core-idle']=false
+        s.props.path=a; s:event('start-file'); s:event('file-loaded')
+        return s
+    end
+    local function last_timer(s) local t; for _,x in ipairs(s.timers) do if not x.dead then t=x end end; return t end
+    local function frame(c) return {w=8,h=8,stride=32,format='bgra',data=string.rep(string.char(c[1],c[2],c[3],0),64)} end
+    local function grab(s,t,c)
+        s.props['time-pos']=t
+        local tm=last_timer(s); tm.dead=true; tm.cb()
+        local shots=sb_jobs(s,'screenshot-raw')
+        shots[#shots].cb(true,frame(c))
+    end
+    s=livestart()
+    check('Live stream without storyboards waits for a frame',sb_info(s).disabled==true and last_timer(s).delay==3)
+    grab(s,100,{10,20,30})
+    info=sb_info(s)
+    check('First live capture enables thumbnails at fitted size',info.disabled==false and info.width==4 and info.height==4)
+    local nt=last_timer(s)
+    check('Next capture is scheduled at a random gap in range',nt.delay>=20 and nt.delay<=60)
+    grab(s,160,{200,100,50})
+    s.messages.thumb('105','5','6')
+    adds=sb_jobs(s,'overlay-add')
+    local addr=adds[1] and adds[1].cmd[5]
+    check('Hover shows nearest captured frame from memory',#adds==1 and addr:match('^&%d+$') and adds[1].cmd[8]==4 and adds[1].cmd[10]==16)
+    local px=require('ffi').cast('uint8_t*',tonumber(addr:sub(2)))
+    check('Captured frame is downscaled with opaque BGRA pixels',px[0]==10 and px[1]==20 and px[2]==30 and px[3]==255 and px[63]==255)
+    s.messages.thumb('150','5','6')
+    adds=sb_jobs(s,'overlay-add')
+    px=require('ffi').cast('uint8_t*',tonumber(adds[2].cmd[5]:sub(2)))
+    check('Closer later frame wins',#adds==2 and px[0]==200)
+    s.messages.thumb('400','5','6')
+    check('No frame within tolerance removes the overlay',#sb_jobs(s,'overlay-remove')==1)
+    grab(s,220,{1,1,1})
+    s.messages.thumb('95','5','6')
+    check('Oldest frame beyond live_max_frames is dropped',#sb_jobs(s,'overlay-add')==2)
+    s.props['core-idle']=true
+    local before=#sb_jobs(s,'screenshot-raw')
+    local tm=last_timer(s); tm.dead=true; tm.cb()
+    check('Paused or buffering playback skips the capture and reschedules',#sb_jobs(s,'screenshot-raw')==before and last_timer(s)~=tm)
+    s.props['core-idle']=false
+    tm=last_timer(s); tm.dead=true; tm.cb()
+    local shots=sb_jobs(s,'screenshot-raw')
+    s.props.path=b; s:event('start-file')
+    check('File change stops live capture',last_timer(s)==nil and sb_info(s).disabled==true)
+    shots[#shots].cb(true,frame({9,9,9}))
+    check('Stale capture after file change is ignored',sb_info(s).disabled==true and last_timer(s)==nil)
+
 end
 local ok,err=xpcall(run,debug.traceback)
 io=real_io
