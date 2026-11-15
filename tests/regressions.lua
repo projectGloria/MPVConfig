@@ -279,6 +279,25 @@ local function run()
     check('History records the Twitch stream title',
         (s.storage['mock/mpv-history.txt'] or ''):find('Grand final FURIA vs SPIRIT',1,true)~=nil)
 
+    -- Emoji splitting for the colour title (pure functions, no mp needed)
+    local emoji=dofile('portable_config/script-modules/emoji.lua')
+    local function names(text)
+        local out={}
+        for _,p in ipairs(emoji.split(text)) do out[#out+1]=p.name or ('['..p.text..']') end
+        return table.concat(out,' ')
+    end
+    check('Emoji: flags, tag flag, keycap, ZWJ and VS16 named like Twemoji',
+        names('💥 🇭🇰 🏴󠁧󠁢󠁥󠁮󠁧󠁿 #️⃣ 👨‍💻 ❤️ ok')==
+        '1f4a5 [ ] 1f1ed-1f1f0 [ ] 1f3f4-e0067-e0062-e0065-e006e-e0067-e007f [ ] 23-20e3 [ ] 1f468-200d-1f4bb [ ] 2764 [ ok]')
+    check('Emoji: skin tones and ZWJ keep FE0F only inside ZWJ sequences',
+        names('👍🏽')=='1f44d-1f3fd' and names('🏳️‍🌈')=='1f3f3-fe0f-200d-1f308')
+    check('Emoji: adjacent flags pair up, a lone regional indicator stays text',
+        names('🇺🇸🇯🇵')=='1f1fa-1f1f8 1f1ef-1f1f5' and names('🇺')=='[🇺]')
+    check('Emoji: plain text, text-style symbols and bare digits are left alone',
+        names('Hong Kong ✔ © 2026 #1')=='[Hong Kong ✔ © 2026 #1]' and names('☺︎')=='[☺︎]')
+    check('Emoji: ZWJ fallback name drops FE0F',emoji.alt_name('1f3f3-fe0f-200d-1f308')=='1f3f3-200d-1f308'
+        and emoji.alt_name('1f4a5')==nil)
+
     s=fixture('history_menu.lua'); s.props.path='D:/Media/sample.mp4'
     s.files[s.props.path]={is_file=true,size=1000,mtime=100}
     s:event('file-loaded'); s:fire(2)

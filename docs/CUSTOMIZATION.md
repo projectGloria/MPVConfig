@@ -10,7 +10,7 @@ Edit text files with a UTF-8 editor and restart MPV. In MPV paths, `~~/` means t
 |---|---|
 | `mpv.conf` | Rendering, cache budgets, subtitles, screenshots, stream selector and profiles |
 | `input.conf` | Explicit keyboard/mouse controls |
-| `script-opts/tethys.conf` | Tethys bar sizing, icons/buttons, skip amounts and the box behind the window title |
+| `script-opts/tethys.conf` | Tethys bar sizing, icons/buttons, skip amounts the box behind the window title and colour emoji (`windowTitleEmoji`) |
 | `script-opts/quality-menu.conf` | Curated streaming formats and menu appearance |
 | `script-opts/history_menu.conf` | History size, grid scale and thumbnail concurrency |
 | `script-opts/window_state.conf` | First-run window defaults and transition timing |

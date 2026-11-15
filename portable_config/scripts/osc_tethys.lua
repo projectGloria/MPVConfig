@@ -54,6 +54,9 @@ local tethys = {
     windowTitleBoxPadX = 10,
     windowTitleBoxPadY = 5,
     windowTitleBoxRadius = 6,
+    -- Draw emoji/flags in the window title in colour (Twemoji images,
+    -- downloaded once into ~~cache/twemoji). no = plain libass glyphs.
+    windowTitleEmoji = true,
     windowButtonColor = "CCCCCC",
     closeButtonHoveredColor = "1111DD", -- #DD1111
     seekbarHandleColor = "FFFFFF",
@@ -1219,7 +1222,7 @@ function measure_text_width(style, text)
     local key = rx .. "x" .. ry .. "\0" .. style .. "\0" .. text
     local w = measure_cache[key]
     if w == nil then
-        if measure_count >= 64 then measure_cache, measure_count = {}, 0 end
+        if measure_count >= 256 then measure_cache, measure_count = {}, 0 end
         measure_overlay = measure_overlay or mp.create_osd_overlay("ass-events")
         measure_overlay.res_x, measure_overlay.res_y = rx, ry
         measure_overlay.hidden = true
@@ -1230,6 +1233,64 @@ function measure_text_width(style, text)
         measure_cache[key], measure_count = w, measure_count + 1
     end
     return w or nil
+end
+
+-- Pen advance of ASS text (unlike the ink width above, trailing spaces count):
+-- 1px marker drawings on both ends, minus the markers alone.
+local ADVANCE_MARK = "{\\p1}m 0 0 l 1 0 1 1 0 1{\\p0}"
+function measure_text_advance(style, text)
+    if text == "" then return 0 end
+    local a = measure_text_width(style, ADVANCE_MARK .. text .. ADVANCE_MARK)
+    local b = measure_text_width(style, ADVANCE_MARK .. ADVANCE_MARK)
+    return a and b and (a - b) or nil
+end
+
+-- Colour emoji in the window title (script-modules/emoji.lua). Emoji whose
+-- image is ready are replaced by an invisible gap of the image's width and
+-- drawn as one overlay; the rest stay as plain glyphs.
+local emoji_mod, emoji_layer
+if tethys.windowTitleEmoji then
+    local ok, mod = pcall(dofile, mp.command_native({"expand-path", "~~/script-modules/emoji.lua"}))
+    if ok and type(mod) == "table" then
+        emoji_mod = mod
+        emoji_layer = mod.layer({overlay_id = 44, on_ready = function() request_tick() end})
+    else
+        msg.warn("emoji module not loaded: " .. tostring(mod))
+    end
+end
+local emoji_split_cache = {text = nil, parts = nil}
+
+function render_title_emoji(element, text, emoji_lo)
+    if not emoji_layer then return text end
+    if emoji_split_cache.text ~= text then
+        emoji_split_cache.text, emoji_split_cache.parts = text, emoji_mod.split(text)
+    end
+    local parts = emoji_split_cache.parts
+    local sx, sy = get_virt_scale_factor()
+    if sx <= 0 or sy <= 0 then return text end
+    local size_px = math.floor(emoji_lo.size / sy + 0.5)
+    local pad_px = math.max(1, math.floor(size_px * 0.08 + 0.5))
+    -- gap width in playres units, exact to the image plus side padding
+    local gap = (size_px + 2 * pad_px) * sx
+    local geo = element.layout.geometry
+    local out, items, full = {}, {}, true
+    for _, p in ipairs(parts) do
+        if p.text then
+            out[#out + 1] = p.text
+        elseif emoji_layer.state(p.name) == "ready" then
+            local adv = measure_text_advance(emoji_lo.style, table.concat(out))
+            if adv and geo.x + adv + gap <= emoji_lo.clip_right then
+                items[#items + 1] = {name = p.name, x = adv / sx + pad_px}
+            end
+            out[#out + 1] = ("{\\p1}m 0 0 m %.3f 0{\\p0}"):format(gap)
+        else
+            out[#out + 1] = p.emoji
+        end
+    end
+    local opacity = (255 - (state.animation or 0)) / 255
+    emoji_layer.draw(geo.x / sx, (geo.y - size_px * sy / 2) / sy, size_px, items, opacity)
+    state.emoji_drawn = true
+    return table.concat(out)
 end
 
 function ass_append_alpha(ass, alpha, modifier)
@@ -1824,10 +1885,15 @@ function render_elements(master_ass)
                 master_ass:merge(shadow_ass)
             end
 
+            if button_lo.emoji then
+                buttontext = render_title_emoji(element, buttontext, button_lo.emoji)
+            end
+
             -- Background box sized to the text (window title)
             local text_box = button_lo.text_box
             if text_box and text_box.alpha < 255 then
-                local tw = measure_text_width(text_box.measure_style, buttontext)
+                -- Advance, not ink width: emoji gaps at either end have no ink.
+                local tw = measure_text_advance(text_box.measure_style, buttontext)
                 if tw then
                     local geo = element.layout.geometry
                     local boxW = math.min(tw + 2 * text_box.pad_x, text_box.max_w)
@@ -2244,6 +2310,13 @@ function window_controls(topbar)
             h = tethys.windowTitleSize + 2 * tethys.windowTitleBoxPadY,
             radius = tethys.windowTitleBoxRadius,
             max_w = titlebox_right - rightPad - lo.geometry.x + 2 * boxPadX,
+        }
+    end
+    if emoji_layer then
+        lo.button.emoji = {
+            style = tethysStyle.windowTitle,
+            size = tethys.windowTitleSize,
+            clip_right = titlebox_right - rightPad,
         }
     end
 
@@ -4277,8 +4350,12 @@ function render()
     preRenderThumbnails()
 
     -- actual OSC
+    state.emoji_drawn = false
     if state.osc_visible then
         render_elements(ass)
+    end
+    if emoji_layer and not state.emoji_drawn then
+        emoji_layer.clear()
     end
 
     -- PostRender

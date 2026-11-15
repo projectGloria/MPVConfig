@@ -59,7 +59,7 @@ local BASE_CARD_W  = 320
 local BASE_CARD_H  = 244
 local BASE_GRID_PAD = 24
 local BASE_OVERLAY_ID = 0
-local MAX_OVERLAY_ID  = 63
+local MAX_OVERLAY_ID  = 41 -- 42+ belong to thumbfast, storyboard, Tethys emoji
 
 -- Runtime scaled card geometry (updated every draw_menu / get_grid_dimensions).
 local CARD_W, CARD_H = BASE_CARD_W, BASE_CARD_H
