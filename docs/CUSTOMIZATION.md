@@ -70,6 +70,7 @@ The downloader deliberately reads your usual yt-dlp configuration, which may aff
 | `osc_tethys.lua` | Vendored/customized Tethys interface; asks thumbfast/storyboard for seekbar thumbnails |
 | `thumbfast.lua` | Unmodified upstream on-demand thumbnailer (one hidden mpv, only while hovering) |
 | `storyboard.lua` | Seekbar thumbnails for streams from YouTube storyboard sprite sheets |
+| `stream_title.lua` | Shows the real Twitch live stream title (yt-dlp reports "Channel (live) date") |
 | `quality-menu.lua` | Vendored/customized streaming format menus and experimental local settings |
 | `autoload.lua` | Folder playlist population |
 | `clipboard.lua` | Manual clipboard load and supported timestamp seeking |

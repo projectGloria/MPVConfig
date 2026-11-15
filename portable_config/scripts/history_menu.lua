@@ -115,7 +115,10 @@ local function ensure_thumb_dir()
         playback_only = false,
         capture_stdout = true,
         capture_stderr = true,
-        args = { "cmd", "/c", "if not exist \"" .. td .. "\" mkdir \"" .. td .. "\"" },
+        -- Path as its own argument: mpv quotes it correctly. Embedding quotes
+        -- in one string made mpv escape them as \" and cmd rejected the path,
+        -- so the folder (and every history thumbnail) was never created.
+        args = { "cmd", "/d", "/c", "mkdir", td },
     })
 end
 
@@ -235,8 +238,8 @@ end
 
 local function title_from_ytdlp_json(json)
     if type(json) ~= "table" then return "" end
-    local value = json["title"]
-    if value and tostring(value) ~= "" then return clean_text(value) end
+    local value = metadata.title(json)
+    if value then return clean_text(value) end
     return ""
 end
 

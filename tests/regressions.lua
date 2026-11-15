@@ -257,6 +257,28 @@ local function run()
     s:event('file-loaded'); s:fire(2)
     check('History rejects metadata for another video',#s.jobs==1 and s.jobs[1].args[1]=='yt-dlp')
 
+    -- Twitch live: yt-dlp's title is a placeholder, the stream title is the description
+    local tw='https://www.twitch.tv/somechannel'
+    local function twitch(s,extra)
+        local j={webpage_url=tw,extractor_key='TwitchStream',title='SomeChannel (live) 2026-11-15 13:27',
+            description='  Grand final FURIA vs SPIRIT  \nsecond line',uploader='SomeChannel',is_live=true}
+        for k,v in pairs(extra or {}) do j[k]=v end
+        s.props[result_key]={status=0,stdout=real_utils.format_json(j)}
+        s.props['demuxer-via-network']=true; s.props.path=tw
+    end
+    s=fixture('stream_title.lua'); twitch(s); s:event('file-loaded')
+    check('Twitch live shows the stream title, not the placeholder',
+        s.props['file-local-options/force-media-title']=='Grand final FURIA vs SPIRIT')
+    s=fixture('stream_title.lua'); twitch(s,{description=''}); s:event('file-loaded')
+    check('Twitch live without a description keeps the yt-dlp title',s.props['file-local-options/force-media-title']==nil)
+    s=fixture('stream_title.lua'); shared(s,a); s.props['demuxer-via-network']=true; s.props.path=a; s:event('file-loaded')
+    check('Other sites keep their own title',s.props['file-local-options/force-media-title']==nil)
+    s=fixture('history_menu.lua'); twitch(s,{thumbnail='https://example.com/t.jpg'})
+    s:event('file-loaded'); s:fire(2)
+    local tj=s.jobs[1]; s.files[tj.args[#tj.args]]={is_file=true,size=300*168*4}; tj.cb(true,{status=0})
+    check('History records the Twitch stream title',
+        (s.storage['mock/mpv-history.txt'] or ''):find('Grand final FURIA vs SPIRIT',1,true)~=nil)
+
     s=fixture('history_menu.lua'); s.props.path='D:/Media/sample.mp4'
     s.files[s.props.path]={is_file=true,size=1000,mtime=100}
     s:event('file-loaded'); s:fire(2)
