@@ -41,4 +41,17 @@ function M.get(url)
     end
 end
 
+-- The title to show for a yt-dlp result. Twitch live streams are the odd one:
+-- yt-dlp sets `title` to "Channel (live) YYYY-MM-DD HH:MM" and puts the
+-- broadcaster's actual stream title in `description`.
+function M.title(json)
+    if type(json) ~= "table" then return nil end
+    if json.extractor_key == "TwitchStream" and type(json.description) == "string" then
+        local t = (json.description:match("^%s*([^\r\n]*)") or ""):gsub("%s+$", "")
+        if t ~= "" then return t end
+    end
+    if type(json.title) == "string" and json.title ~= "" then return json.title end
+    return nil
+end
+
 return M

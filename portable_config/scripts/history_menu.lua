@@ -59,7 +59,7 @@ local BASE_CARD_W  = 320
 local BASE_CARD_H  = 244
 local BASE_GRID_PAD = 24
 local BASE_OVERLAY_ID = 0
-local MAX_OVERLAY_ID  = 63
+local MAX_OVERLAY_ID  = 41 -- 42+ belong to thumbfast, storyboard, Tethys emoji
 
 -- Runtime scaled card geometry (updated every draw_menu / get_grid_dimensions).
 local CARD_W, CARD_H = BASE_CARD_W, BASE_CARD_H
@@ -115,7 +115,10 @@ local function ensure_thumb_dir()
         playback_only = false,
         capture_stdout = true,
         capture_stderr = true,
-        args = { "cmd", "/c", "if not exist \"" .. td .. "\" mkdir \"" .. td .. "\"" },
+        -- Path as its own argument: mpv quotes it correctly. Embedding quotes
+        -- in one string made mpv escape them as \" and cmd rejected the path,
+        -- so the folder (and every history thumbnail) was never created.
+        args = { "cmd", "/d", "/c", "mkdir", td },
     })
 end
 
@@ -235,8 +238,8 @@ end
 
 local function title_from_ytdlp_json(json)
     if type(json) ~= "table" then return "" end
-    local value = json["title"]
-    if value and tostring(value) ~= "" then return clean_text(value) end
+    local value = metadata.title(json)
+    if value then return clean_text(value) end
     return ""
 end
 

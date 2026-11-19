@@ -10,7 +10,7 @@ Edit text files with a UTF-8 editor and restart MPV. In MPV paths, `~~/` means t
 |---|---|
 | `mpv.conf` | Rendering, cache budgets, subtitles, screenshots, stream selector and profiles |
 | `input.conf` | Explicit keyboard/mouse controls |
-| `script-opts/tethys.conf` | Tethys bar sizing, icons/buttons and skip amounts |
+| `script-opts/tethys.conf` | Tethys bar sizing, icons/buttons, skip amounts the box behind the window title and colour emoji (`windowTitleEmoji`) |
 | `script-opts/quality-menu.conf` | Curated streaming formats and menu appearance |
 | `script-opts/history_menu.conf` | History size, grid scale and thumbnail concurrency |
 | `script-opts/window_state.conf` | First-run window defaults and transition timing |
@@ -70,6 +70,7 @@ The downloader deliberately reads your usual yt-dlp configuration, which may aff
 | `osc_tethys.lua` | Vendored/customized Tethys interface; asks thumbfast/storyboard for seekbar thumbnails |
 | `thumbfast.lua` | Unmodified upstream on-demand thumbnailer (one hidden mpv, only while hovering) |
 | `storyboard.lua` | Seekbar thumbnails for streams from YouTube storyboard sprite sheets |
+| `stream_title.lua` | Shows the real Twitch live stream title (yt-dlp reports "Channel (live) date") |
 | `quality-menu.lua` | Vendored/customized streaming format menus and experimental local settings |
 | `autoload.lua` | Folder playlist population |
 | `clipboard.lua` | Manual clipboard load and supported timestamp seeking |

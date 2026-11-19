@@ -20,6 +20,8 @@ Packaging-specific changes are recorded in [SHARING_NOTES.md](SHARING_NOTES.md).
 
 ## External tools and fonts — not bundled
 
+Colour emoji in the window title are [Twemoji](https://github.com/jdecked/twemoji) graphics (Copyright Twitter, Inc. and other contributors; graphics licensed under [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)). They are not bundled: `script-modules/emoji.lua` downloads each one from the jsDelivr CDN on first use into the ignored `portable_config/cache/twemoji/` folder.
+
 [MPV](https://mpv.io/), [yt-dlp](https://github.com/yt-dlp/yt-dlp), [FFmpeg](https://ffmpeg.org/), [Deno](https://deno.com/), [Python](https://www.python.org/) and [Montserrat](https://fonts.google.com/specimen/Montserrat) are downloaded/installed separately and retain their own terms.
 
 `docs/assets/banner.svg` is an original illustrative asset created for this package. It is not a playback screenshot or an official project logo.
