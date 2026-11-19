@@ -737,6 +737,14 @@ local thumbfast = {
     disabled = true,
     available = false,
 }
+-- storyboard.lua serves streams (YouTube sprite sheets) with the same
+-- protocol; it wins when available, thumbfast covers everything else.
+local storyboard = {
+    width = 0,
+    height = 0,
+    disabled = true,
+    available = false,
+}
 -- Last request sent to thumbfast. render() runs up to ~30x/s while hovering,
 -- so only send a message when time or position actually changed.
 local thumbRequest = {
@@ -753,6 +761,12 @@ mp.register_script_message("thumbfast-info", function(json)
     thumbfast = data
     request_tick()
 end)
+mp.register_script_message("storyboard-info", function(json)
+    local data = utils.parse_json(json)
+    if type(data) ~= "table" then return end
+    storyboard = data
+    request_tick()
+end)
 
 -- A new file can reuse the same hover time/position; drop the dedupe key so
 -- the first hover on the new file still reaches thumbfast.
@@ -760,17 +774,29 @@ mp.register_event("start-file", function()
     thumbRequest.time, thumbRequest.x, thumbRequest.y = nil, nil, nil
 end)
 
-function hasThumbfast()
-    return thumbfast.available and not thumbfast.disabled
-        and (thumbfast.width or 0) > 0 and (thumbfast.height or 0) > 0
+local function thumbUsable(p)
+    return p.available and not p.disabled
+        and (p.width or 0) > 0 and (p.height or 0) > 0
+end
+-- Returns the script name and info of the thumbnail provider to use, or nil.
+function thumbProvider()
+    if thumbUsable(storyboard) then return "storyboard", storyboard end
+    if thumbUsable(thumbfast) then return "thumbfast", thumbfast end
 end
 function requestThumbnail(time, globalX, globalY)
+    local target = thumbProvider()
+    if not target then return end
     thumbRequest.visible = true
+    if target ~= thumbRequest.target and thumbRequest.target then
+        mp.commandv("script-message-to", thumbRequest.target, "clear")
+        thumbRequest.time = nil
+    end
+    thumbRequest.target = target
     if time == thumbRequest.time and globalX == thumbRequest.x and globalY == thumbRequest.y then
         return
     end
     thumbRequest.time, thumbRequest.x, thumbRequest.y = time, globalX, globalY
-    mp.commandv("script-message-to", "thumbfast", "thumb",
+    mp.commandv("script-message-to", target, "thumb",
         tostring(time), tostring(globalX), tostring(globalY))
 end
 function preRenderThumbnails()
@@ -781,7 +807,7 @@ function postRenderThumbnails()
     -- Tooltip was shown last frame but not this one: remove the overlay.
     if thumbRequest.wasVisible and not thumbRequest.visible then
         thumbRequest.time, thumbRequest.x, thumbRequest.y = nil, nil, nil
-        mp.commandv("script-message-to", "thumbfast", "clear")
+        mp.commandv("script-message-to", thumbRequest.target or "thumbfast", "clear")
     end
 end
 
@@ -826,12 +852,13 @@ function renderThumbnailTooltip(pos, sliderPos, ass)
         return
     end
 
-    -- thumbfast reports real (screen) pixels. Without a thumbnail (streams,
-    -- thumbfast missing) keep the old width so edge clamping still works,
+    -- thumbfast/storyboard report real (screen) pixels. Without a thumbnail
+    -- (live streams, no provider) keep the old width so edge clamping still works,
     -- but collapse the height so the timestamp sits right above the seekbar.
-    local showThumb = hasThumbfast()
-    local thumbGlobalWidth = showThumb and thumbfast.width or tethys.thumbnailSize
-    local thumbGlobalHeight = showThumb and thumbfast.height or 0
+    local _, thumbInfo = thumbProvider()
+    local showThumb = thumbInfo ~= nil
+    local thumbGlobalWidth = showThumb and thumbInfo.width or tethys.thumbnailSize
+    local thumbGlobalHeight = showThumb and thumbInfo.height or 0
     local thumbWidth =  math.floor(thumbGlobalWidth * scaleX)
     local thumbHeight =  math.floor(thumbGlobalHeight * scaleY)
 
@@ -1701,7 +1728,7 @@ function render_elements(master_ass)
                     end
 
                     -- Tooltip + Thumbnail
-                    -- Thumbnail frames come from thumbfast.lua
+                    -- Thumbnail frames come from thumbfast.lua / storyboard.lua
                     local thumbPos = {
                         x=get_virt_mouse_pos(),
                         y=ty,
